@@ -221,7 +221,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken); err != nil {
+	userID := c.GetString("user_id")
+	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "revoke_error",
 			Message: "Failed to revoke token",

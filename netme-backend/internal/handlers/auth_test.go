@@ -93,10 +93,13 @@ func (m *mockTokenRepo) GetRefreshToken(token string) (*models.RefreshToken, err
 	return rt, nil
 }
 
-func (m *mockTokenRepo) RevokeRefreshToken(token string) error {
+func (m *mockTokenRepo) RevokeRefreshToken(token, userID string) error {
 	rt, ok := m.tokens[token]
 	if !ok {
 		return errors.New("refresh token not found")
+	}
+	if rt.UserID != userID {
+		return errors.New("token does not belong to user")
 	}
 	now := time.Now()
 	rt.RevokedAt = &now

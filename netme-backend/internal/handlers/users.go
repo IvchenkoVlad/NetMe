@@ -17,8 +17,15 @@ func NewUsersHandler(userRepo repositories.UserRepo) *UsersHandler {
 }
 
 func (h *UsersHandler) GetMe(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	user, err := h.userRepo.GetUserByID(userID.(string))
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "unauthorized",
+			Message: "Not authenticated",
+		})
+		return
+	}
+	user, err := h.userRepo.GetUserByID(userIDVal.(string))
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{
 			Error:   "user_not_found",

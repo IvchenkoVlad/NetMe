@@ -16,7 +16,7 @@ type UserRepo interface {
 type TokenRepo interface {
 	CreateRefreshToken(userID, token string, expiresAt time.Time) (*models.RefreshToken, error)
 	GetRefreshToken(token string) (*models.RefreshToken, error)
-	RevokeRefreshToken(token string) error
+	RevokeRefreshToken(token, userID string) error
 	RevokeAllUserTokens(userID string) error
 	IsRefreshTokenValid(token string) (bool, error)
 }

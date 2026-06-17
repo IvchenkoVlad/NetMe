@@ -52,10 +52,10 @@ func (r *TokenRepository) GetRefreshToken(token string) (*models.RefreshToken, e
 	return rt, nil
 }
 
-func (r *TokenRepository) RevokeRefreshToken(token string) error {
+func (r *TokenRepository) RevokeRefreshToken(token, userID string) error {
 	_, err := r.db.Exec(
-		`UPDATE refresh_tokens SET revoked_at = now(), updated_at = now() WHERE token = $1`,
-		token,
+		`UPDATE refresh_tokens SET revoked_at = now(), updated_at = now() WHERE token = $1 AND user_id = $2`,
+		token, userID,
 	)
 	return err
 }
