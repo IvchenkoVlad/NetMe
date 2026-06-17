@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,16 +9,16 @@ import (
 )
 
 type UsersHandler struct {
-	authRepo *repositories.AuthRepository
+	userRepo repositories.UserRepo
 }
 
-func NewUsersHandler(db *sql.DB) *UsersHandler {
-	return &UsersHandler{authRepo: repositories.NewAuthRepository(db)}
+func NewUsersHandler(userRepo repositories.UserRepo) *UsersHandler {
+	return &UsersHandler{userRepo: userRepo}
 }
 
 func (h *UsersHandler) GetMe(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	user, err := h.authRepo.GetUserByID(userID.(string))
+	user, err := h.userRepo.GetUserByID(userID.(string))
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{
 			Error:   "user_not_found",

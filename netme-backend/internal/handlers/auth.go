@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,14 +12,16 @@ import (
 )
 
 type AuthHandler struct {
-	authRepo        *repositories.AuthRepository
+	userRepo        repositories.UserRepo
+	tokenRepo       repositories.TokenRepo
 	jwtService      *services.JWTService
 	passwordService *services.PasswordService
 }
 
-func NewAuthHandler(db *sql.DB, jwtSvc *services.JWTService) *AuthHandler {
+func NewAuthHandler(userRepo repositories.UserRepo, tokenRepo repositories.TokenRepo, jwtSvc *services.JWTService) *AuthHandler {
 	return &AuthHandler{
-		authRepo:        repositories.NewAuthRepository(db),
+		userRepo:        userRepo,
+		tokenRepo:       tokenRepo,
 		jwtService:      jwtSvc,
 		passwordService: services.NewPasswordService(),
 	}
@@ -36,7 +37,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	existingUser, _ := h.authRepo.GetUserByEmail(req.Email)
+	existingUser, _ := h.userRepo.GetUserByEmail(req.Email)
 	if existingUser != nil {
 		c.JSON(http.StatusConflict, models.ErrorResponse{
 			Error:   "user_exists",
@@ -54,7 +55,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authRepo.CreateUser(req.Email, passwordHash)
+	user, err := h.userRepo.CreateUser(req.Email, passwordHash)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "creation_error",
@@ -75,7 +76,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.authRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
+	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
 		return
@@ -100,7 +101,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authRepo.GetUserByEmail(req.Email)
+	user, err := h.userRepo.GetUserByEmail(req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 			Error:   "invalid_credentials",
@@ -137,13 +138,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.authRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
+	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
 		return
 	}
 
-	if err := h.authRepo.UpdateLastLogin(user.ID); err != nil {
+	if err := h.userRepo.UpdateLastLogin(user.ID); err != nil {
 		slog.Warn("failed to update last login", "user_id", user.ID, "error", err)
 	}
 
@@ -166,7 +167,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	valid, err := h.authRepo.IsRefreshTokenValid(req.RefreshToken)
+	valid, err := h.tokenRepo.IsRefreshTokenValid(req.RefreshToken)
 	if !valid || err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 			Error:   "invalid_token",
@@ -175,7 +176,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	refreshTokenRecord, err := h.authRepo.GetRefreshToken(req.RefreshToken)
+	refreshTokenRecord, err := h.tokenRepo.GetRefreshToken(req.RefreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 			Error:   "invalid_token",
@@ -184,7 +185,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authRepo.GetUserByID(refreshTokenRecord.UserID)
+	user, err := h.userRepo.GetUserByID(refreshTokenRecord.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 			Error:   "user_not_found",
@@ -220,7 +221,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.authRepo.RevokeRefreshToken(req.RefreshToken); err != nil {
+	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "revoke_error",
 			Message: "Failed to revoke token",

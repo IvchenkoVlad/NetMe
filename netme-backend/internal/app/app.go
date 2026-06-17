@@ -10,6 +10,7 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/db"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/middleware"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
 )
 
@@ -34,9 +35,12 @@ func New() (*App, error) {
 	}
 	log.Info("database connected")
 
+	userRepo := repositories.NewUserRepository(database)
+	tokenRepo := repositories.NewTokenRepository(database)
 	jwtSvc := services.NewJWTService(jwtSecret)
-	authHandler := handlers.NewAuthHandler(database, jwtSvc)
-	usersHandler := handlers.NewUsersHandler(database)
+
+	authHandler := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc)
+	usersHandler := handlers.NewUsersHandler(userRepo)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
