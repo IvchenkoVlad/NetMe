@@ -12,9 +12,12 @@ import (
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load("../../.env.local"); err != nil {
-		log.Println("No .env.local file found, using system environment")
+	// Load environment variables - try multiple paths
+	for _, path := range []string{".env.local", ".env", "../../.env.local", "../../.env"} {
+		if err := godotenv.Load(path); err == nil {
+			log.Printf("Loaded environment from: %s", path)
+			break
+		}
 	}
 
 	// Parse command-line arguments
