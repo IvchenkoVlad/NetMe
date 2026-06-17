@@ -3,14 +3,13 @@ package models
 import "time"
 
 type User struct {
-	ID           string     `json:"id"`
-	Email        string     `json:"email"`
-	PasswordHash string     `json:"-"`
-	DisplayName  *string    `json:"display_name,omitempty"`
-	PictureURL   *string    `json:"picture_url,omitempty"`
-	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID                 string    `json:"id"`
+	Email              string    `json:"email"`
+	PasswordHash       string    `json:"-"`
+	AuthProvider       string    `json:"auth_provider"`
+	AuthProviderUserID *string   `json:"auth_provider_user_id,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type RegisterRequest struct {
@@ -26,7 +25,7 @@ type LoginRequest struct {
 type AuthResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"` // seconds
+	ExpiresIn    int    `json:"expires_in"`
 	User         *User  `json:"user"`
 }
 

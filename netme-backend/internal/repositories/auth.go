@@ -17,99 +17,85 @@ func NewAuthRepository(db *sql.DB) *AuthRepository {
 }
 
 func (r *AuthRepository) CreateUser(email, passwordHash string) (*models.User, error) {
-	user := &models.User{
-		Email: email,
-		PasswordHash: passwordHash,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
+	user := &models.User{}
 	err := r.db.QueryRow(
-		`INSERT INTO users (email, password_hash, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, created_at, updated_at`,
-		email, passwordHash, user.CreatedAt, user.UpdatedAt,
-	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
-
+		`INSERT INTO users (email, password_hash, auth_provider, created_at, updated_at)
+		 VALUES ($1, $2, 'local', now(), now())
+		 RETURNING id, email, auth_provider, auth_provider_user_id, created_at, updated_at`,
+		email, passwordHash,
+	).Scan(
+		&user.ID, &user.Email, &user.AuthProvider,
+		&user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
-
+	user.PasswordHash = passwordHash
 	return user, nil
 }
 
 func (r *AuthRepository) GetUserByEmail(email string) (*models.User, error) {
 	user := &models.User{}
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, display_name, picture_url, last_login_at, created_at, updated_at
+		`SELECT id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at
 		 FROM users WHERE email = $1`,
 		email,
 	).Scan(
 		&user.ID, &user.Email, &user.PasswordHash,
-		&user.DisplayName, &user.PictureURL, &user.LastLoginAt,
+		&user.AuthProvider, &user.AuthProviderUserID,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("user not found")
 		}
 		return nil, err
 	}
-
 	return user, nil
 }
 
 func (r *AuthRepository) GetUserByID(userID string) (*models.User, error) {
 	user := &models.User{}
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, display_name, picture_url, last_login_at, created_at, updated_at
+		`SELECT id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at
 		 FROM users WHERE id = $1`,
 		userID,
 	).Scan(
 		&user.ID, &user.Email, &user.PasswordHash,
-		&user.DisplayName, &user.PictureURL, &user.LastLoginAt,
+		&user.AuthProvider, &user.AuthProviderUserID,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("user not found")
 		}
 		return nil, err
 	}
-
 	return user, nil
 }
 
 func (r *AuthRepository) UpdateLastLogin(userID string) error {
 	_, err := r.db.Exec(
-		`UPDATE users SET last_login_at = $1, updated_at = $2 WHERE id = $3`,
-		time.Now(), time.Now(), userID,
+		`UPDATE users SET updated_at = now() WHERE id = $1`,
+		userID,
 	)
 	return err
 }
 
 func (r *AuthRepository) CreateRefreshToken(userID, token string, expiresAt time.Time) (*models.RefreshToken, error) {
-	rt := &models.RefreshToken{
-		UserID:    userID,
-		Token:     token,
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
+	rt := &models.RefreshToken{}
 	err := r.db.QueryRow(
 		`INSERT INTO refresh_tokens (user_id, token, expires_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, created_at, updated_at`,
-		userID, token, expiresAt, rt.CreatedAt, rt.UpdatedAt,
-	).Scan(&rt.ID, &rt.CreatedAt, &rt.UpdatedAt)
-
+		 VALUES ($1, $2, $3, now(), now())
+		 RETURNING id, user_id, token, expires_at, revoked_at, created_at, updated_at`,
+		userID, token, expiresAt,
+	).Scan(
+		&rt.ID, &rt.UserID, &rt.Token, &rt.ExpiresAt,
+		&rt.RevokedAt, &rt.CreatedAt, &rt.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
-
 	return rt, nil
 }
 
@@ -120,34 +106,30 @@ func (r *AuthRepository) GetRefreshToken(token string) (*models.RefreshToken, er
 		 FROM refresh_tokens WHERE token = $1`,
 		token,
 	).Scan(
-		&rt.ID, &rt.UserID, &rt.Token, &rt.ExpiresAt, &rt.RevokedAt,
-		&rt.CreatedAt, &rt.UpdatedAt,
+		&rt.ID, &rt.UserID, &rt.Token, &rt.ExpiresAt,
+		&rt.RevokedAt, &rt.CreatedAt, &rt.UpdatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("refresh token not found")
 		}
 		return nil, err
 	}
-
 	return rt, nil
 }
 
 func (r *AuthRepository) RevokeRefreshToken(token string) error {
-	now := time.Now()
 	_, err := r.db.Exec(
-		`UPDATE refresh_tokens SET revoked_at = $1, updated_at = $2 WHERE token = $3`,
-		now, now, token,
+		`UPDATE refresh_tokens SET revoked_at = now(), updated_at = now() WHERE token = $1`,
+		token,
 	)
 	return err
 }
 
 func (r *AuthRepository) RevokeAllUserTokens(userID string) error {
-	now := time.Now()
 	_, err := r.db.Exec(
-		`UPDATE refresh_tokens SET revoked_at = $1, updated_at = $2 WHERE user_id = $3`,
-		now, now, userID,
+		`UPDATE refresh_tokens SET revoked_at = now(), updated_at = now() WHERE user_id = $1`,
+		userID,
 	)
 	return err
 }
@@ -157,14 +139,11 @@ func (r *AuthRepository) IsRefreshTokenValid(token string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	if rt.RevokedAt != nil {
 		return false, errors.New("token is revoked")
 	}
-
 	if time.Now().After(rt.ExpiresAt) {
 		return false, errors.New("token is expired")
 	}
-
 	return true, nil
 }
