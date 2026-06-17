@@ -36,6 +36,7 @@ func New() (*App, error) {
 
 	jwtSvc := services.NewJWTService(jwtSecret)
 	authHandler := handlers.NewAuthHandler(database, jwtSvc)
+	usersHandler := handlers.NewUsersHandler(database)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
@@ -54,6 +55,8 @@ func New() (*App, error) {
 	protected.Use(middleware.AuthMiddleware(jwtSvc))
 	{
 		protected.POST("/auth/logout", authHandler.Logout)
+		protected.GET("/me", usersHandler.GetMe)
+		protected.DELETE("/me", usersHandler.DeleteMe)
 		handlers.RegisterAccountRoutes(protected, database)
 		handlers.RegisterTransactionRoutes(protected, database)
 	}
