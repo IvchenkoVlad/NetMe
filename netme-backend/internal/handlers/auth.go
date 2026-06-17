@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -142,7 +143,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	h.authRepo.UpdateLastLogin(user.ID)
+	if err := h.authRepo.UpdateLastLogin(user.ID); err != nil {
+		slog.Warn("failed to update last login", "user_id", user.ID, "error", err)
+	}
 
 	user.PasswordHash = ""
 	c.JSON(http.StatusOK, models.AuthResponse{
