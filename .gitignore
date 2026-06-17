@@ -47,12 +47,14 @@ mobile/ios/*.xcworkspace/
 mobile/.env*
 
 # Database backups (never commit production data)
+# But DO commit migration files in netme-backend/internal/db/migrations/
 *.sql
 *.sql.gz
 *.dump
 *.dmp
 backups/
 database-dumps/
+!netme-backend/internal/db/migrations/*.sql
 
 # IDE & Editor
 .vscode/

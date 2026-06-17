@@ -1,86 +1,34 @@
 package main
 
 import (
-	"flag"
-	"fmt"
+	"database/sql"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/joho/godotenv"
-	"github.com/vladyslavivchenko/netme/internal/db"
+	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
 )
 
 func main() {
-	// Load environment variables - try multiple paths
-	for _, path := range []string{".env.local", ".env", "../../.env.local", "../../.env"} {
-		if err := godotenv.Load(path); err == nil {
-			log.Printf("Loaded environment from: %s", path)
-			break
-		}
-	}
+	godotenv.Load()
 
-	// Parse command-line arguments
-	upCmd := flag.NewFlagSet("up", flag.ExitOnError)
-	downCmd := flag.NewFlagSet("down", flag.ExitOnError)
-	downSteps := downCmd.Int("steps", 1, "Number of migrations to rollback")
-
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	command := os.Args[1]
-
-	// Connect to database
-	database, err := db.Connect(os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to connect to database: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to open database: %v", err)
 	}
-	defer database.Close()
+	defer db.Close()
 
-	switch command {
-	case "up":
-		upCmd.Parse(os.Args[2:])
-		if err := db.Migrate(database); err != nil {
-			fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✓ Migrations completed successfully")
-
-	case "down":
-		downCmd.Parse(os.Args[2:])
-		steps := *downSteps
-		if len(downCmd.Args()) > 0 {
-			if s, err := strconv.Atoi(downCmd.Args()[0]); err == nil {
-				steps = s
-			}
-		}
-		if err := db.MigrateDown(database, steps); err != nil {
-			fmt.Fprintf(os.Stderr, "Migration rollback failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✓ Migrations rolled back successfully")
-
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
-		printUsage()
-		os.Exit(1)
+	if err := goose.SetDialect("postgres"); err != nil {
+		log.Fatal(err)
 	}
-}
 
-func printUsage() {
-	fmt.Println(`Usage: migrate <command> [options]
+	args := os.Args[1:]
+	if len(args) == 0 {
+		args = []string{"up"}
+	}
 
-Commands:
-  up              Apply all pending migrations
-  down [steps]    Rollback migrations (default: 1 step)
-
-Examples:
-  migrate up           # Apply all pending migrations
-  migrate down         # Rollback last migration
-  migrate down 3       # Rollback last 3 migrations
-  migrate down --steps 2  # Rollback 2 migrations (same as above)
-`)
+	if err := goose.Run(args[0], db, "internal/db/migrations", args[1:]...); err != nil {
+		log.Fatalf("goose %s: %v", args[0], err)
+	}
 }
