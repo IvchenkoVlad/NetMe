@@ -1,0 +1,41 @@
+# Node modules
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Expo
+.expo/
+dist/
+.expo-shared/
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+
+# Android
+android/.gradle/
+android/local.properties
+
+# IDE generated files
+.eslintcache
+.prettierignore
+
+# Test
+coverage/
+*.lcov
+
+# OS
+Thumbs.db

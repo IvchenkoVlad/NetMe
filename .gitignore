@@ -1,0 +1,99 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.private
+.env.private
+.env.backup
+secrets/
+config/secrets/
+.secrets/
+
+# Credentials & API Keys
+*.pem
+*.key
+*.p12
+*.p8
+*.jks
+*.mobileprovision
+*.orig.*
+secrets.json
+credentials.json
+aws-credentials
+firebase-key.json
+plaid-keys.json
+
+# Backend
+backend/bin/
+backend/dist/
+backend/.DS_Store
+backend/*.log
+backend/logs/
+backend/.env*
+backend/vendor/
+
+# Mobile
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/npm-debug.*
+mobile/web-build/
+mobile/ios/Pods/
+mobile/ios/*.xcworkspace/
+mobile/.env*
+
+# Database backups (never commit production data)
+*.sql
+*.sql.gz
+*.dump
+*.dmp
+backups/
+database-dumps/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+.env.*.swp
+*.pyo
+*.pyc
+__pycache__/
+
+# Docker
+.docker-sync
+docker-sync.yml
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Git
+.git/
+.gitignore.swp
+
+# Claude Code local settings
+.claude/settings.local.json

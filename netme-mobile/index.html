@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetMe — Hello World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #999;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .button {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: #007AFF;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
+        }
+
+        .button:hover:not(:disabled) {
+            background: #0056CC;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 122, 255, 0.5);
+        }
+
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .response-box {
+            background: #d4edda;
+            border: 1px solid #28a745;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .response-box.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .response-box h3 {
+            color: #155724;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .response-box p {
+            color: #155724;
+            font-size: 16px;
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .response-box .sub {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .error-box {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-box.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-box h3 {
+            color: #721c24;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .error-box p {
+            color: #721c24;
+            font-size: 14px;
+            word-break: break-word;
+        }
+
+        .error-box .hint {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .status-box {
+            background: #f0f0f0;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .status-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NetMe 💰</h1>
+        <p class="subtitle">Test Backend Connection</p>
+
+        <button class="button" id="btn" onclick="handleClick()">
+            👇 Click Me — Call Backend
+        </button>
+
+        <div class="response-box" id="response">
+            <h3>✅ Backend Response:</h3>
+            <p id="message"></p>
+            <p class="sub" id="backend"></p>
+        </div>
+
+        <div class="error-box" id="error">
+            <h3>❌ Error:</h3>
+            <p id="errorMsg"></p>
+            <p class="hint">Make sure backend is running: <code>go run cmd/server/main.go</code></p>
+        </div>
+
+        <div class="status-box">
+            <div class="status-label">Connection Status:</div>
+            <div class="status-value" id="status">🟡 Not tested yet</div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api/v1/hello?name=Web';
+
+        async function handleClick() {
+            const btn = document.getElementById('btn');
+            const responseBox = document.getElementById('response');
+            const errorBox = document.getElementById('error');
+            const statusEl = document.getElementById('status');
+
+            // Reset
+            btn.disabled = true;
+            btn.textContent = '⏳ Loading...';
+            responseBox.classList.remove('show');
+            errorBox.classList.remove('show');
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+
+                // Show response
+                document.getElementById('message').textContent = data.message;
+                document.getElementById('backend').textContent = data.backend || '';
+                responseBox.classList.add('show');
+                statusEl.textContent = '🟢 Connected';
+            } catch (err) {
+                // Show error
+                document.getElementById('errorMsg').textContent = err.message;
+                errorBox.classList.add('show');
+                statusEl.textContent = '🔴 Failed';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '👇 Click Me — Call Backend';
+            }
+        }
+    </script>
+</body>
+</html>
