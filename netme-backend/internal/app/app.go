@@ -6,15 +6,13 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"github.com/vladyslavivchenko/netme/internal/db"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/middleware"
 )
 
 type App struct {
-	db    *sql.DB
-	redis *redis.Client
+	db     *sql.DB
 	router *gin.Engine
 }
 
@@ -24,11 +22,6 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("database connection failed: %w", err)
 	}
-
-	// Connect to Redis
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("REDIS_URL"),
-	})
 
 	// Create Gin router
 	router := gin.Default()
@@ -40,19 +33,14 @@ func New() (*App, error) {
 	// Register API routes
 	api := router.Group("/api/v1")
 	{
-		// Public endpoints
-		api.GET("/hello", handlers.HelloHandler())
-
 		// Auth endpoints
 		handlers.RegisterAuthRoutes(api, database)
 		handlers.RegisterAccountRoutes(api, database)
 		handlers.RegisterTransactionRoutes(api, database)
-		handlers.RegisterAnalyticsRoutes(api, database)
 	}
 
 	return &App{
-		db:    database,
-		redis: redisClient,
+		db:     database,
 		router: router,
 	}, nil
 }
@@ -68,8 +56,5 @@ func (a *App) Start() error {
 }
 
 func (a *App) Close() error {
-	if err := a.db.Close(); err != nil {
-		return err
-	}
-	return a.redis.Close()
+	return a.db.Close()
 }
