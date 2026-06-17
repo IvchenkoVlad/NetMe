@@ -2,28 +2,42 @@ package handlers
 
 import (
 	"database/sql"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vladyslavivchenko/netme/internal/models"
 )
 
-func RegisterAccountRoutes(router *gin.RouterGroup, db *sql.DB) {
-	accounts := router.Group("/accounts")
+type AccountsHandler struct {
+	db *sql.DB
+}
+
+func NewAccountsHandler(db *sql.DB) *AccountsHandler {
+	return &AccountsHandler{db: db}
+}
+
+func RegisterAccountRoutes(r *gin.RouterGroup, db *sql.DB) {
+	NewAccountsHandler(db).RegisterRoutes(r)
+}
+
+func (h *AccountsHandler) RegisterRoutes(r *gin.RouterGroup) {
+	accounts := r.Group("/accounts")
 	{
-		accounts.GET("", ListAccountsHandler(db))
-		accounts.GET("/:id", GetAccountHandler(db))
+		accounts.GET("", h.ListAccounts)
+		accounts.GET("/:id", h.GetAccount)
 	}
 }
 
-func ListAccountsHandler(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Implement list accounts
-		c.JSON(200, gin.H{"message": "list accounts endpoint"})
-	}
+func (h *AccountsHandler) ListAccounts(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
+		Error:   "not_implemented",
+		Message: "Accounts endpoint not yet implemented",
+	})
 }
 
-func GetAccountHandler(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Implement get account
-		c.JSON(200, gin.H{"message": "get account endpoint"})
-	}
+func (h *AccountsHandler) GetAccount(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
+		Error:   "not_implemented",
+		Message: "Accounts endpoint not yet implemented",
+	})
 }

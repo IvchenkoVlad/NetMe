@@ -2,36 +2,42 @@ package handlers
 
 import (
 	"database/sql"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vladyslavivchenko/netme/internal/models"
 )
 
-func RegisterTransactionRoutes(router *gin.RouterGroup, db *sql.DB) {
-	transactions := router.Group("/transactions")
+type TransactionsHandler struct {
+	db *sql.DB
+}
+
+func NewTransactionsHandler(db *sql.DB) *TransactionsHandler {
+	return &TransactionsHandler{db: db}
+}
+
+func RegisterTransactionRoutes(r *gin.RouterGroup, db *sql.DB) {
+	NewTransactionsHandler(db).RegisterRoutes(r)
+}
+
+func (h *TransactionsHandler) RegisterRoutes(r *gin.RouterGroup) {
+	txns := r.Group("/transactions")
 	{
-		transactions.GET("", ListTransactionsHandler(db))
-		transactions.GET("/:id", GetTransactionHandler(db))
-		transactions.GET("/search", SearchTransactionsHandler(db))
+		txns.GET("", h.ListTransactions)
+		txns.GET("/:id", h.GetTransaction)
 	}
 }
 
-func ListTransactionsHandler(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Implement list transactions
-		c.JSON(200, gin.H{"message": "list transactions endpoint"})
-	}
+func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
+		Error:   "not_implemented",
+		Message: "Transactions endpoint not yet implemented",
+	})
 }
 
-func GetTransactionHandler(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Implement get transaction
-		c.JSON(200, gin.H{"message": "get transaction endpoint"})
-	}
-}
-
-func SearchTransactionsHandler(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Implement search transactions
-		c.JSON(200, gin.H{"message": "search transactions endpoint"})
-	}
+func (h *TransactionsHandler) GetTransaction(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
+		Error:   "not_implemented",
+		Message: "Transactions endpoint not yet implemented",
+	})
 }
