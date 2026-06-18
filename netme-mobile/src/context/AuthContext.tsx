@@ -5,9 +5,8 @@ import { authService } from '../services/authService';
 export interface User {
   id: string;
   email: string;
-  display_name?: string;
-  picture_url?: string;
-  last_login_at?: string;
+  auth_provider: string;
+  auth_provider_user_id?: string;
   created_at: string;
   updated_at: string;
 }

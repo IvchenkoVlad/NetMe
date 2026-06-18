@@ -8,8 +8,8 @@ export interface AuthResponse {
   user: {
     id: string;
     email: string;
-    display_name?: string;
-    picture_url?: string;
+    auth_provider: string;
+    auth_provider_user_id?: string;
     created_at: string;
     updated_at: string;
   };
@@ -21,7 +21,7 @@ class AuthService {
   private refreshSubscribers: ((token: string) => void)[] = [];
 
   constructor() {
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.158:8080/v1';
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1';
 
     this.api = axios.create({
       baseURL: apiUrl,
@@ -75,7 +75,10 @@ class AuthService {
               }
             } catch (refreshError) {
               this.isRefreshing = false;
-              await secureStorage.clearAll();
+              // Only clear auth on HTTP auth failures, not network errors
+              if (axios.isAxiosError(refreshError) && refreshError.response) {
+                await secureStorage.clearAll();
+              }
               throw refreshError;
             }
           } else {
@@ -99,18 +102,12 @@ class AuthService {
   }
 
   async register(email: string, password: string): Promise<AuthResponse> {
-    const response = await this.api.post<AuthResponse>('/auth/register', {
-      email,
-      password,
-    });
+    const response = await this.api.post<AuthResponse>('/auth/register', { email, password });
     return response.data;
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await this.api.post<AuthResponse>('/auth/login', {
-      email,
-      password,
-    });
+    const response = await this.api.post<AuthResponse>('/auth/login', { email, password });
     return response.data;
   }
 
@@ -133,31 +130,15 @@ class AuthService {
       await this.api.post(
         '/auth/logout',
         { refresh_token: refreshToken },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
     } catch (error) {
       console.error('Logout API call failed:', error);
     }
   }
 
-  async logoutAllDevices(accessToken: string): Promise<void> {
-    try {
-      await this.api.post(
-        '/auth/logout-all-devices',
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
-    } catch (error) {
-      console.error('Logout all devices API call failed:', error);
-    }
+  async deleteAccount(): Promise<void> {
+    await this.api.delete('/me');
   }
 }
 
