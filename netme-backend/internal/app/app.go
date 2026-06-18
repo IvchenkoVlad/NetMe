@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/db"
@@ -12,6 +13,7 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/middleware"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
+	"golang.org/x/time/rate"
 )
 
 type App struct {
@@ -53,10 +55,10 @@ func New() (*App, error) {
 
 	auth := v1.Group("/auth")
 	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
-		auth.POST("/refresh", authHandler.Refresh)
-		auth.POST("/google", authHandler.GoogleAuth)
+		auth.POST("/register", middleware.RateLimiter(rate.Every(12*time.Second), 5), authHandler.Register)
+		auth.POST("/login", middleware.RateLimiter(rate.Every(6*time.Second), 10), authHandler.Login)
+		auth.POST("/refresh", middleware.RateLimiter(rate.Every(6*time.Second), 10), authHandler.Refresh)
+		auth.POST("/google", middleware.RateLimiter(rate.Every(6*time.Second), 10), authHandler.GoogleAuth)
 	}
 
 	protected := v1.Group("")
