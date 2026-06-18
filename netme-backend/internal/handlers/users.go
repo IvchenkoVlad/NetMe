@@ -38,8 +38,22 @@ func (h *UsersHandler) GetMe(c *gin.Context) {
 }
 
 func (h *UsersHandler) DeleteMe(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Account deletion is not yet available",
-	})
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "unauthorized",
+			Message: "Not authenticated",
+		})
+		return
+	}
+
+	if err := h.userRepo.DeleteUser(userIDVal.(string)); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "delete_error",
+			Message: "Failed to delete account",
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

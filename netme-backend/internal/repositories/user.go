@@ -119,3 +119,18 @@ func (r *UserRepository) UpdateLastLogin(userID string) error {
 	)
 	return err
 }
+
+func (r *UserRepository) DeleteUser(userID string) error {
+	result, err := r.db.Exec(`DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}
