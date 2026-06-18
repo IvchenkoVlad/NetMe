@@ -203,10 +203,28 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
+	// Rotate: create new refresh token before revoking old one
+	newRefreshTokenString, err := h.jwtService.GenerateRefreshToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
+		return
+	}
+
+	newRefreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, newRefreshTokenString, time.Now().Add(7*24*time.Hour))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
+		return
+	}
+
+	// Revoke old token — log failure but don't block (old token expires naturally)
+	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken, user.ID); err != nil {
+		slog.Warn("failed to revoke old refresh token during rotation", "user_id", user.ID, "error", err)
+	}
+
 	user.PasswordHash = ""
 	c.JSON(http.StatusOK, models.AuthResponse{
 		AccessToken:  accessToken,
-		RefreshToken: req.RefreshToken,
+		RefreshToken: newRefreshToken.Token,
 		ExpiresIn:    900,
 		User:         user,
 	})

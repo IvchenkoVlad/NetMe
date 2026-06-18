@@ -366,3 +366,52 @@ func TestGoogleAuthInvalidToken(t *testing.T) {
 		t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestRefreshRotatesToken(t *testing.T) {
+	r, userRepo, tokenRepo := newTestAuthRouter()
+
+	// Register to get initial tokens
+	regW := httptest.NewRecorder()
+	regReq, _ := http.NewRequest(http.MethodPost, "/v1/auth/register",
+		jsonBody(t, map[string]string{"email": "rotate@example.com", "password": "password123"}))
+	regReq.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(regW, regReq)
+	if regW.Code != http.StatusCreated {
+		t.Fatalf("register failed: %d %s", regW.Code, regW.Body.String())
+	}
+
+	var regResp models.AuthResponse
+	json.Unmarshal(regW.Body.Bytes(), &regResp)
+	originalRefreshToken := regResp.RefreshToken
+
+	// Pre-populate userRepo so Refresh handler can find the user
+	_ = userRepo
+	_ = tokenRepo
+
+	// Call refresh
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/refresh",
+		jsonBody(t, map[string]string{"refresh_token": originalRefreshToken}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var refreshResp models.AuthResponse
+	json.Unmarshal(w.Body.Bytes(), &refreshResp)
+
+	if refreshResp.RefreshToken == originalRefreshToken {
+		t.Error("expected rotated refresh token, got same token back")
+	}
+	if refreshResp.RefreshToken == "" {
+		t.Error("expected non-empty rotated refresh token")
+	}
+
+	// Original token must be revoked
+	rt, _ := tokenRepo.GetRefreshToken(originalRefreshToken)
+	if rt.RevokedAt == nil {
+		t.Error("expected original refresh token to be revoked after rotation")
+	}
+}
