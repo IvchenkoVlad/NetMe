@@ -27,6 +27,19 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getJWTExpiry(token: string): number | null {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '==='.slice((base64.length + 3) % 4);
+    const payload = JSON.parse(atob(padded));
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -43,13 +56,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const savedRefreshToken = await secureStorage.getRefreshToken();
       const savedUser = await secureStorage.getUser();
 
-      if (savedAccessToken && savedRefreshToken && savedUser) {
+      if (!savedAccessToken || !savedRefreshToken || !savedUser) {
+        return;
+      }
+
+      const expiry = getJWTExpiry(savedAccessToken);
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const isExpiredOrExpiringSoon = expiry === null || expiry - nowSeconds < 60;
+
+      if (isExpiredOrExpiringSoon) {
+        try {
+          const response = await authService.refresh(savedRefreshToken);
+          setAccessToken(response.access_token);
+          setRefreshToken(response.refresh_token);
+          setUser(response.user);
+          await secureStorage.saveAccessToken(response.access_token);
+          await secureStorage.saveRefreshToken(response.refresh_token);
+          await secureStorage.saveUser(JSON.stringify(response.user));
+        } catch {
+          await secureStorage.clearAll();
+        }
+      } else {
         setAccessToken(savedAccessToken);
         setRefreshToken(savedRefreshToken);
         setUser(JSON.parse(savedUser));
       }
     } catch (error) {
-      console.error('Failed to restore token:', error);
+      console.error('Failed to restore session:', error);
     } finally {
       setIsLoading(false);
     }
