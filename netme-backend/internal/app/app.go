@@ -39,7 +39,10 @@ func New() (*App, error) {
 	tokenRepo := repositories.NewTokenRepository(database)
 	jwtSvc := services.NewJWTService(jwtSecret)
 
-	authHandler := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc)
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	googleVerifier := services.NewGoogleIDTokenVerifier(googleClientID)
+
+	authHandler := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, googleVerifier)
 	usersHandler := handlers.NewUsersHandler(userRepo)
 
 	router := gin.Default()

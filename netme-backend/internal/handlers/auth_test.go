@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
 )
 
@@ -63,12 +65,28 @@ func (m *mockUserRepo) GetUserByID(id string) (*models.User, error) {
 func (m *mockUserRepo) UpdateLastLogin(userID string) error { return nil }
 
 func (m *mockUserRepo) FindOrCreateGoogleUser(googleID, email string) (*models.User, error) {
-	if u, ok := m.users[email]; ok {
-		return u, nil
+	// Check for existing Google user
+	for _, u := range m.users {
+		if u.AuthProvider == "google" && u.AuthProviderUserID != nil && *u.AuthProviderUserID == googleID {
+			return u, nil
+		}
 	}
-	u := &models.User{ID: "google-" + googleID, Email: email, AuthProvider: "google"}
-	m.users[email] = u
-	return u, nil
+	// Check for email conflict with different provider
+	if existing, ok := m.users[email]; ok && existing.AuthProvider != "google" {
+		return nil, repositories.ErrEmailTakenByOtherProvider
+	}
+	// Create new Google user
+	googleIDCopy := googleID
+	user := &models.User{
+		ID:                 "google-user-" + googleID,
+		Email:              email,
+		AuthProvider:       "google",
+		AuthProviderUserID: &googleIDCopy,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+	m.users[email] = user
+	return user, nil
 }
 
 // --- Mock TokenRepo ---
@@ -139,20 +157,40 @@ func (m *mockTokenRepo) IsRefreshTokenValid(token string) (bool, error) {
 	return true, nil
 }
 
+// --- Mock GoogleVerifier ---
+
+type mockGoogleVerifier struct {
+	googleID string
+	email    string
+	err      error
+}
+
+func (m *mockGoogleVerifier) Validate(_ context.Context, _, _ string) (string, string, error) {
+	return m.googleID, m.email, m.err
+}
+
 // --- Helpers ---
 
 func newTestAuthRouter() (*gin.Engine, *mockUserRepo, *mockTokenRepo) {
+	return newTestAuthRouterWithVerifier(&mockGoogleVerifier{
+		googleID: "google-123",
+		email:    "google@example.com",
+	})
+}
+
+func newTestAuthRouterWithVerifier(verifier services.GoogleVerifier) (*gin.Engine, *mockUserRepo, *mockTokenRepo) {
 	gin.SetMode(gin.TestMode)
 	userRepo := newMockUserRepo()
 	tokenRepo := newMockTokenRepo()
 	jwtSvc := services.NewJWTService(testAuthSecret)
-	h := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc)
+	h := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, verifier)
 
 	r := gin.New()
 	r.POST("/v1/auth/register", h.Register)
 	r.POST("/v1/auth/login", h.Login)
 	r.POST("/v1/auth/refresh", h.Refresh)
 	r.POST("/v1/auth/logout", h.Logout)
+	r.POST("/v1/auth/google", h.GoogleAuth)
 	return r, userRepo, tokenRepo
 }
 
@@ -260,6 +298,67 @@ func TestRefreshWithInvalidToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/refresh",
 		jsonBody(t, map[string]string{"refresh_token": "nonexistent-token"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGoogleAuthSuccess(t *testing.T) {
+	verifier := &mockGoogleVerifier{googleID: "g-uid-1", email: "guser@example.com"}
+	r, _, _ := newTestAuthRouterWithVerifier(verifier)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/google",
+		jsonBody(t, map[string]string{"id_token": "valid-google-id-token"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp models.AuthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.AccessToken == "" {
+		t.Error("expected non-empty access_token")
+	}
+}
+
+func TestGoogleAuthEmailConflict(t *testing.T) {
+	// Verifier returns valid Google token, but email already exists with local provider
+	verifier := &mockGoogleVerifier{googleID: "g-uid-2", email: "existing@example.com"}
+	r, userRepo, _ := newTestAuthRouterWithVerifier(verifier)
+
+	// Pre-populate mock with a local account using the same email
+	userRepo.users["existing@example.com"] = &models.User{
+		ID:           "local-user-1",
+		Email:        "existing@example.com",
+		PasswordHash: "somehash",
+		AuthProvider: "local",
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/google",
+		jsonBody(t, map[string]string{"id_token": "valid-token"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGoogleAuthInvalidToken(t *testing.T) {
+	verifier := &mockGoogleVerifier{err: errors.New("invalid ID token")}
+	r, _, _ := newTestAuthRouterWithVerifier(verifier)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/google",
+		jsonBody(t, map[string]string{"id_token": "bad-token"}))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 

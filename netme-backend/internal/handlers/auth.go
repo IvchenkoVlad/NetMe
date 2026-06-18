@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -19,14 +17,16 @@ type AuthHandler struct {
 	tokenRepo       repositories.TokenRepo
 	jwtService      *services.JWTService
 	passwordService *services.PasswordService
+	googleVerifier  services.GoogleVerifier
 }
 
-func NewAuthHandler(userRepo repositories.UserRepo, tokenRepo repositories.TokenRepo, jwtSvc *services.JWTService) *AuthHandler {
+func NewAuthHandler(userRepo repositories.UserRepo, tokenRepo repositories.TokenRepo, jwtSvc *services.JWTService, googleVerifier services.GoogleVerifier) *AuthHandler {
 	return &AuthHandler{
 		userRepo:        userRepo,
 		tokenRepo:       tokenRepo,
 		jwtService:      jwtSvc,
 		passwordService: services.NewPasswordService(),
+		googleVerifier:  googleVerifier,
 	}
 }
 
@@ -238,33 +238,29 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 func (h *AuthHandler) GoogleAuth(c *gin.Context) {
 	var req struct {
-		AccessToken string `json:"access_token" binding:"required"`
+		IDToken string `json:"id_token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
 		return
 	}
 
-	resp, err := http.Get("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + req.AccessToken)
-	if err != nil || resp.StatusCode != http.StatusOK {
+	googleID, email, err := h.googleVerifier.Validate(c.Request.Context(), req.IDToken, "")
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid_token", Message: "Failed to verify Google token"})
 		return
 	}
-	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	var googleUser struct {
-		ID    string `json:"id"`
-		Email string `json:"email"`
-	}
-	if err := json.Unmarshal(body, &googleUser); err != nil || googleUser.ID == "" {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid_token", Message: "Invalid Google user info"})
-		return
-	}
-
-	user, err := h.userRepo.FindOrCreateGoogleUser(googleUser.ID, googleUser.Email)
+	user, err := h.userRepo.FindOrCreateGoogleUser(googleID, email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: fmt.Sprintf("Failed to find or create user: %v", err)})
+		if errors.Is(err, repositories.ErrEmailTakenByOtherProvider) {
+			c.JSON(http.StatusConflict, models.ErrorResponse{
+				Error:   "email_conflict",
+				Message: "An account with this email already exists. Please log in with your password.",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: "Failed to sign in with Google"})
 		return
 	}
 
