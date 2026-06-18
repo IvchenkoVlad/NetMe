@@ -114,9 +114,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await authService.refresh(refreshToken);
 
       setAccessToken(response.access_token);
+      setRefreshToken(response.refresh_token);
       setUser(response.user);
 
       await secureStorage.saveAccessToken(response.access_token);
+      await secureStorage.saveRefreshToken(response.refresh_token);
       await secureStorage.saveUser(JSON.stringify(response.user));
 
       return true;

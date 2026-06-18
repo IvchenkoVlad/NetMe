@@ -114,9 +114,9 @@ class AuthService {
     return response.data;
   }
 
-  async loginWithGoogle(googleAccessToken: string): Promise<AuthResponse> {
+  async loginWithGoogle(googleIDToken: string): Promise<AuthResponse> {
     const response = await this.api.post<AuthResponse>('/auth/google', {
-      access_token: googleAccessToken,
+      id_token: googleIDToken,
     });
     return response.data;
   }
