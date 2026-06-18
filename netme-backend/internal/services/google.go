@@ -22,7 +22,7 @@ func NewGoogleIDTokenVerifier(clientID string) *GoogleIDTokenVerifier {
 }
 
 func (v *GoogleIDTokenVerifier) Validate(ctx context.Context, idToken, audience string) (string, string, error) {
-	payload, err := idtoken.Validate(ctx, idToken, audience)
+	payload, err := idtoken.Validate(ctx, idToken, v.clientID)
 	if err != nil {
 		return "", "", err
 	}
