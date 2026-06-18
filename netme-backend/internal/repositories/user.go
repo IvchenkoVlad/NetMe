@@ -75,22 +75,40 @@ func (r *UserRepository) GetUserByID(userID string) (*models.User, error) {
 
 func (r *UserRepository) FindOrCreateGoogleUser(googleID, email string) (*models.User, error) {
 	user := &models.User{}
+
+	// Step 1: existing Google user — normal login path
 	err := r.db.QueryRow(
 		`SELECT id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at
 		 FROM users WHERE auth_provider = 'google' AND auth_provider_user_id = $1`,
 		googleID,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider, &user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider,
+		&user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
 	if err == nil {
 		return user, nil
 	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 
+	// Step 2: email exists with a different provider — refuse, prevent account takeover
+	var existingProvider string
+	err = r.db.QueryRow(`SELECT auth_provider FROM users WHERE email = $1`, email).Scan(&existingProvider)
+	if err == nil {
+		return nil, ErrEmailTakenByOtherProvider
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	// Step 3: new user — create Google account
+	user = &models.User{}
 	err = r.db.QueryRow(
 		`INSERT INTO users (email, auth_provider, auth_provider_user_id, created_at, updated_at)
 		 VALUES ($1, 'google', $2, now(), now())
-		 ON CONFLICT (email) DO UPDATE SET auth_provider_user_id = $2, updated_at = now()
 		 RETURNING id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at`,
 		email, googleID,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider, &user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider,
+		&user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
 	return user, err
 }
 
