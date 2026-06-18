@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/models"
 )
 
@@ -109,7 +110,14 @@ func (r *UserRepository) FindOrCreateGoogleUser(googleID, email string) (*models
 		email, googleID,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider,
 		&user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
-	return user, err
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return nil, ErrEmailTakenByOtherProvider
+		}
+		return nil, err
+	}
+	return user, nil
 }
 
 func (r *UserRepository) UpdateLastLogin(userID string) error {

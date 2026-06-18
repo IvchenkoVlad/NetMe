@@ -44,12 +44,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	if parsed, err := mail.ParseAddress(req.Email); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "invalid email address",
 		})
 		return
+	} else {
+		req.Email = parsed.Address
 	}
 
 	existingUser, _ := h.userRepo.GetUserByEmail(req.Email)
@@ -125,12 +127,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	if parsed, err := mail.ParseAddress(req.Email); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "invalid email address",
 		})
 		return
+	} else {
+		req.Email = parsed.Address
 	}
 
 	user, err := h.userRepo.GetUserByEmail(req.Email)
