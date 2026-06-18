@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -22,6 +23,7 @@ const AuthStack = () => (
 const AppStack = () => (
   <Tab.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
     <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+    <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
   </Tab.Navigator>
 );
 
