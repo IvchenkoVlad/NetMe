@@ -73,6 +73,27 @@ func (r *UserRepository) GetUserByID(userID string) (*models.User, error) {
 	return user, nil
 }
 
+func (r *UserRepository) FindOrCreateGoogleUser(googleID, email string) (*models.User, error) {
+	user := &models.User{}
+	err := r.db.QueryRow(
+		`SELECT id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at
+		 FROM users WHERE auth_provider = 'google' AND auth_provider_user_id = $1`,
+		googleID,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider, &user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
+	if err == nil {
+		return user, nil
+	}
+
+	err = r.db.QueryRow(
+		`INSERT INTO users (email, auth_provider, auth_provider_user_id, created_at, updated_at)
+		 VALUES ($1, 'google', $2, now(), now())
+		 ON CONFLICT (email) DO UPDATE SET auth_provider_user_id = $2, updated_at = now()
+		 RETURNING id, email, password_hash, auth_provider, auth_provider_user_id, created_at, updated_at`,
+		email, googleID,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.AuthProvider, &user.AuthProviderUserID, &user.CreatedAt, &user.UpdatedAt)
+	return user, err
+}
+
 func (r *UserRepository) UpdateLastLogin(userID string) error {
 	_, err := r.db.Exec(
 		`UPDATE users SET updated_at = now() WHERE id = $1`,

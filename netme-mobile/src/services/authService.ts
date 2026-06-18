@@ -21,7 +21,7 @@ class AuthService {
   private refreshSubscribers: ((token: string) => void)[] = [];
 
   constructor() {
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.158:8080/api/v1';
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.158:8080/v1';
 
     this.api = axios.create({
       baseURL: apiUrl,
@@ -110,6 +110,13 @@ class AuthService {
     const response = await this.api.post<AuthResponse>('/auth/login', {
       email,
       password,
+    });
+    return response.data;
+  }
+
+  async loginWithGoogle(googleAccessToken: string): Promise<AuthResponse> {
+    const response = await this.api.post<AuthResponse>('/auth/google', {
+      access_token: googleAccessToken,
     });
     return response.data;
   }

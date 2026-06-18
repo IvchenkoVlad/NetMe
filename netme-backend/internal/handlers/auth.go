@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -231,4 +234,63 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged out"})
+}
+
+func (h *AuthHandler) GoogleAuth(c *gin.Context) {
+	var req struct {
+		AccessToken string `json:"access_token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		return
+	}
+
+	resp, err := http.Get("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + req.AccessToken)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid_token", Message: "Failed to verify Google token"})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var googleUser struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal(body, &googleUser); err != nil || googleUser.ID == "" {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid_token", Message: "Invalid Google user info"})
+		return
+	}
+
+	user, err := h.userRepo.FindOrCreateGoogleUser(googleUser.ID, googleUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: fmt.Sprintf("Failed to find or create user: %v", err)})
+		return
+	}
+
+	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate token"})
+		return
+	}
+
+	refreshTokenString, err := h.jwtService.GenerateRefreshToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
+		return
+	}
+
+	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
+		return
+	}
+
+	user.PasswordHash = ""
+	c.JSON(http.StatusOK, models.AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken.Token,
+		ExpiresIn:    900,
+		User:         user,
+	})
 }

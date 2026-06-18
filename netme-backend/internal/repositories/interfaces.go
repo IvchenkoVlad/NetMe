@@ -11,6 +11,7 @@ type UserRepo interface {
 	GetUserByEmail(email string) (*models.User, error)
 	GetUserByID(id string) (*models.User, error)
 	UpdateLastLogin(userID string) error
+	FindOrCreateGoogleUser(googleID, email string) (*models.User, error)
 }
 
 type TokenRepo interface {

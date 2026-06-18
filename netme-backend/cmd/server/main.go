@@ -11,18 +11,7 @@ import (
 
 func main() {
 	// Load environment variables
-	envPaths := []string{
-		".env.local",           // Current directory
-		"../../.env.local",     // Running from cmd/server
-		"/Users/vladyslavivchenko/Desktop/netme/.env.local", // Absolute path
-	}
-
-	for _, envPath := range envPaths {
-		if err := godotenv.Load(envPath); err == nil {
-			log.Printf("Loaded environment from: %s\n", envPath)
-			break
-		}
-	}
+	godotenv.Load(".env.local")
 
 	// Verify DATABASE_URL is set
 	if os.Getenv("DATABASE_URL") == "" {

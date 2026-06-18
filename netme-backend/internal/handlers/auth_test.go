@@ -62,6 +62,15 @@ func (m *mockUserRepo) GetUserByID(id string) (*models.User, error) {
 
 func (m *mockUserRepo) UpdateLastLogin(userID string) error { return nil }
 
+func (m *mockUserRepo) FindOrCreateGoogleUser(googleID, email string) (*models.User, error) {
+	if u, ok := m.users[email]; ok {
+		return u, nil
+	}
+	u := &models.User{ID: "google-" + googleID, Email: email, AuthProvider: "google"}
+	m.users[email] = u
+	return u, nil
+}
+
 // --- Mock TokenRepo ---
 
 type mockTokenRepo struct {

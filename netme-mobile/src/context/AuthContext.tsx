@@ -20,6 +20,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
   clearAuth: () => Promise<void>;
@@ -89,6 +90,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const loginWithGoogle = async (googleAccessToken: string) => {
+    try {
+      setIsLoading(true);
+      const response = await authService.loginWithGoogle(googleAccessToken);
+      setUser(response.user);
+      setAccessToken(response.access_token);
+      setRefreshToken(response.refresh_token);
+      await secureStorage.saveAccessToken(response.access_token);
+      await secureStorage.saveRefreshToken(response.refresh_token);
+      await secureStorage.saveUser(JSON.stringify(response.user));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshAccessToken = async (): Promise<boolean> => {
     try {
       if (!refreshToken) {
@@ -138,6 +154,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isAuthenticated: !!accessToken,
     login,
     register,
+    loginWithGoogle,
     logout,
     refreshAccessToken,
     clearAuth,

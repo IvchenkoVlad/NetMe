@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	godotenv.Load()
+	godotenv.Load(".env.local")
 
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {

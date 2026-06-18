@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,15 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 import { useAuth } from '../context/AuthContext';
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
 
 export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -22,8 +30,26 @@ export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirm?: string }>({});
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const [googleRequest, googleResponse, googlePrompt] = Google.useAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    scopes: ['openid', 'profile', 'email'],
+    redirectUri: makeRedirectUri(),
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const token = googleResponse.authentication?.accessToken;
+      if (token) {
+        loginWithGoogle(token).catch((err) => {
+          Alert.alert('Google Sign-In Failed', err.response?.data?.message || 'Could not sign in with Google');
+        });
+      }
+    }
+  }, [googleResponse]);
 
   const validate = () => {
     const e: { email?: string; password?: string; confirm?: string } = {};
@@ -143,6 +169,25 @@ export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
             </LinearGradient>
           </TouchableOpacity>
 
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={() => googlePrompt()}
+            disabled={!googleRequest || loading}
+            activeOpacity={0.85}
+          >
+            <Image
+              source={{ uri: 'https://www.google.com/favicon.ico' }}
+              style={styles.googleIcon}
+            />
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => navigation.navigate('Login')} disabled={loading}>
             <Text style={styles.switchText}>
               Already have an account?{'  '}
@@ -245,6 +290,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    color: '#94a3b8',
+    fontSize: 13,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 10,
+    marginBottom: 20,
+  },
+  googleIcon: {
+    width: 18,
+    height: 18,
+  },
+  googleButtonText: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '600',
   },
   switchText: {
     textAlign: 'center',

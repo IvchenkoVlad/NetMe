@@ -53,6 +53,7 @@ func New() (*App, error) {
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+		auth.POST("/google", authHandler.GoogleAuth)
 	}
 
 	protected := v1.Group("")
