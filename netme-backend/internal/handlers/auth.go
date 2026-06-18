@@ -4,9 +4,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
@@ -40,6 +43,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid email address",
+		})
+		return
+	}
+
 	existingUser, _ := h.userRepo.GetUserByEmail(req.Email)
 	if existingUser != nil {
 		c.JSON(http.StatusConflict, models.ErrorResponse{
@@ -60,6 +72,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	user, err := h.userRepo.CreateUser(req.Email, passwordHash)
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			c.JSON(http.StatusConflict, models.ErrorResponse{
+				Error:   "user_exists",
+				Message: "User with this email already exists",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "creation_error",
 			Message: "Failed to create user",
@@ -100,6 +120,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
+		})
+		return
+	}
+
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid email address",
 		})
 		return
 	}

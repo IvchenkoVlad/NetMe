@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
@@ -33,7 +34,7 @@ func (m *mockUserRepo) CreateUser(email, passwordHash string) (*models.User, err
 	if _, exists := m.users[email]; exists {
 		return nil, errors.New("duplicate key")
 	}
-	user := &models.User{
+	stored := &models.User{
 		ID:           "user-" + email,
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -41,8 +42,10 @@ func (m *mockUserRepo) CreateUser(email, passwordHash string) (*models.User, err
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	m.users[email] = user
-	return user, nil
+	m.users[email] = stored
+	// Return a copy so callers zeroing PasswordHash don't corrupt the stored record.
+	returned := *stored
+	return &returned, nil
 }
 
 func (m *mockUserRepo) GetUserByEmail(email string) (*models.User, error) {
@@ -50,7 +53,8 @@ func (m *mockUserRepo) GetUserByEmail(email string) (*models.User, error) {
 	if !ok {
 		return nil, errors.New("user not found")
 	}
-	return user, nil
+	copy := *user
+	return &copy, nil
 }
 
 func (m *mockUserRepo) GetUserByID(id string) (*models.User, error) {
@@ -87,6 +91,16 @@ func (m *mockUserRepo) FindOrCreateGoogleUser(googleID, email string) (*models.U
 	}
 	m.users[email] = user
 	return user, nil
+}
+
+func (m *mockUserRepo) DeleteUser(userID string) error {
+	for email, u := range m.users {
+		if u.ID == userID {
+			delete(m.users, email)
+			return nil
+		}
+	}
+	return errors.New("user not found")
 }
 
 // --- Mock TokenRepo ---
@@ -415,3 +429,85 @@ func TestRefreshRotatesToken(t *testing.T) {
 		t.Error("expected original refresh token to be revoked after rotation")
 	}
 }
+
+func TestRegisterNormalizesEmail(t *testing.T) {
+	r, _, _ := newTestAuthRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/register",
+		jsonBody(t, map[string]string{"email": "  USER@EXAMPLE.COM  ", "password": "password123"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp models.AuthResponse
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.User.Email != "user@example.com" {
+		t.Errorf("expected normalized email 'user@example.com', got %q", resp.User.Email)
+	}
+}
+
+func TestLoginNormalizesEmail(t *testing.T) {
+	r, userRepo, _ := newTestAuthRouter()
+
+	// Register with lowercase first
+	regReq, _ := http.NewRequest(http.MethodPost, "/v1/auth/register",
+		jsonBody(t, map[string]string{"email": "mixed@example.com", "password": "password123"}))
+	regReq.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(httptest.NewRecorder(), regReq)
+	_ = userRepo
+
+	// Login with mixed case
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/login",
+		jsonBody(t, map[string]string{"email": "MIXED@EXAMPLE.COM", "password": "password123"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for normalized login, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRegisterConcurrentDuplicate(t *testing.T) {
+	// Simulate TOCTOU: GetUserByEmail passes but CreateUser returns pq unique violation
+	userRepo := &concurrentMockUserRepo{}
+	tokenRepo := newMockTokenRepo()
+	jwtSvc := services.NewJWTService(testAuthSecret)
+	h := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, &mockGoogleVerifier{})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/v1/auth/register", h.Register)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/auth/register",
+		jsonBody(t, map[string]string{"email": "race@example.com", "password": "password123"}))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("expected 409 for concurrent duplicate, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// concurrentMockUserRepo simulates a TOCTOU race: pre-check passes but INSERT hits unique constraint.
+type concurrentMockUserRepo struct{}
+
+func (m *concurrentMockUserRepo) CreateUser(email, passwordHash string) (*models.User, error) {
+	return nil, &pq.Error{Code: "23505"}
+}
+func (m *concurrentMockUserRepo) GetUserByEmail(email string) (*models.User, error) {
+	return nil, errors.New("user not found")
+}
+func (m *concurrentMockUserRepo) GetUserByID(id string) (*models.User, error) {
+	return nil, errors.New("user not found")
+}
+func (m *concurrentMockUserRepo) UpdateLastLogin(userID string) error { return nil }
+func (m *concurrentMockUserRepo) FindOrCreateGoogleUser(googleID, email string) (*models.User, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *concurrentMockUserRepo) DeleteUser(userID string) error { return nil }
