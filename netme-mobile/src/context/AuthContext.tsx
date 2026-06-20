@@ -14,14 +14,12 @@ export interface User {
 export interface AuthContextType {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
-  refreshAccessToken: () => Promise<boolean>;
   clearAuth: () => Promise<void>;
 }
 
@@ -43,7 +41,6 @@ function getJWTExpiry(token: string): number | null {
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -68,7 +65,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const response = await authService.refresh(savedRefreshToken);
           setAccessToken(response.access_token);
-          setRefreshToken(response.refresh_token);
           setUser(response.user);
           await secureStorage.saveAccessToken(response.access_token);
           await secureStorage.saveRefreshToken(response.refresh_token);
@@ -78,7 +74,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else {
         setAccessToken(savedAccessToken);
-        setRefreshToken(savedRefreshToken);
         setUser(JSON.parse(savedUser));
       }
     } catch (error) {
@@ -95,7 +90,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setUser(response.user);
       setAccessToken(response.access_token);
-      setRefreshToken(response.refresh_token);
 
       await secureStorage.saveAccessToken(response.access_token);
       await secureStorage.saveRefreshToken(response.refresh_token);
@@ -112,7 +106,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setUser(response.user);
       setAccessToken(response.access_token);
-      setRefreshToken(response.refresh_token);
 
       await secureStorage.saveAccessToken(response.access_token);
       await secureStorage.saveRefreshToken(response.refresh_token);
@@ -128,7 +121,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await authService.loginWithGoogle(googleAccessToken);
       setUser(response.user);
       setAccessToken(response.access_token);
-      setRefreshToken(response.refresh_token);
       await secureStorage.saveAccessToken(response.access_token);
       await secureStorage.saveRefreshToken(response.refresh_token);
       await secureStorage.saveUser(JSON.stringify(response.user));
@@ -137,32 +129,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const refreshAccessToken = async (): Promise<boolean> => {
-    try {
-      if (!refreshToken) {
-        return false;
-      }
-
-      const response = await authService.refresh(refreshToken);
-
-      setAccessToken(response.access_token);
-      setRefreshToken(response.refresh_token);
-      setUser(response.user);
-
-      await secureStorage.saveAccessToken(response.access_token);
-      await secureStorage.saveRefreshToken(response.refresh_token);
-      await secureStorage.saveUser(JSON.stringify(response.user));
-
-      return true;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      await clearAuth();
-      return false;
-    }
-  };
-
   const logout = async () => {
     try {
+      const refreshToken = await secureStorage.getRefreshToken();
       if (refreshToken && accessToken) {
         await authService.logout(refreshToken, accessToken);
       }
@@ -176,21 +145,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearAuth = async () => {
     setUser(null);
     setAccessToken(null);
-    setRefreshToken(null);
     await secureStorage.clearAll();
   };
 
   const value: AuthContextType = {
     user,
     accessToken,
-    refreshToken,
     isLoading,
     isAuthenticated: !!accessToken,
     login,
     register,
     loginWithGoogle,
     logout,
-    refreshAccessToken,
     clearAuth,
   };
 

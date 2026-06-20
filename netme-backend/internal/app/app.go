@@ -39,10 +39,19 @@ func New() (*App, error) {
 
 	userRepo := repositories.NewUserRepository(database)
 	tokenRepo := repositories.NewTokenRepository(database)
+	plaidRepo := repositories.NewPlaidRepository(database)
+	budgetRepo := repositories.NewBudgetRepository(database)
+
 	jwtSvc := services.NewJWTService(jwtSecret)
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	googleVerifier := services.NewGoogleIDTokenVerifier(googleClientID)
+
+	plaidSvc := services.NewPlaidService(
+		os.Getenv("PLAID_CLIENT_ID"),
+		os.Getenv("PLAID_SECRET"),
+		os.Getenv("PLAID_ENV"),
+	)
 
 	authHandler := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, googleVerifier)
 	usersHandler := handlers.NewUsersHandler(userRepo)
@@ -67,8 +76,10 @@ func New() (*App, error) {
 		protected.POST("/auth/logout", authHandler.Logout)
 		protected.GET("/me", usersHandler.GetMe)
 		protected.DELETE("/me", usersHandler.DeleteMe)
-		handlers.RegisterAccountRoutes(protected, database)
-		handlers.RegisterTransactionRoutes(protected, database)
+		handlers.RegisterAccountRoutes(protected, plaidRepo)
+		handlers.RegisterTransactionRoutes(protected, plaidRepo)
+		handlers.RegisterPlaidRoutes(protected, v1, plaidSvc, plaidRepo)
+		handlers.RegisterBudgetRoutes(protected, budgetRepo)
 	}
 
 	return &App{

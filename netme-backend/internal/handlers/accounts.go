@@ -1,43 +1,46 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
 type AccountsHandler struct {
-	db *sql.DB
+	plaidRepo *repositories.PlaidRepository
 }
 
-func NewAccountsHandler(db *sql.DB) *AccountsHandler {
-	return &AccountsHandler{db: db}
+func NewAccountsHandler(repo *repositories.PlaidRepository) *AccountsHandler {
+	return &AccountsHandler{plaidRepo: repo}
 }
 
-func RegisterAccountRoutes(r *gin.RouterGroup, db *sql.DB) {
-	NewAccountsHandler(db).RegisterRoutes(r)
+func RegisterAccountRoutes(r *gin.RouterGroup, repo *repositories.PlaidRepository) {
+	NewAccountsHandler(repo).RegisterRoutes(r)
 }
 
 func (h *AccountsHandler) RegisterRoutes(r *gin.RouterGroup) {
 	accounts := r.Group("/accounts")
 	{
 		accounts.GET("", h.ListAccounts)
-		accounts.GET("/:id", h.GetAccount)
 	}
 }
 
 func (h *AccountsHandler) ListAccounts(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Accounts endpoint not yet implemented",
-	})
-}
+	userID, _ := c.Get("user_id")
+	uid := userID.(string)
 
-func (h *AccountsHandler) GetAccount(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Accounts endpoint not yet implemented",
-	})
+	accounts, err := h.plaidRepo.GetAccountsByUserID(uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "database_error",
+			Message: "failed to load accounts",
+		})
+		return
+	}
+	if accounts == nil {
+		accounts = []*models.Account{}
+	}
+	c.JSON(http.StatusOK, gin.H{"accounts": accounts})
 }

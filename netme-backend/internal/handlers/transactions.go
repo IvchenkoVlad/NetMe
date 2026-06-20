@@ -1,43 +1,61 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
 type TransactionsHandler struct {
-	db *sql.DB
+	plaidRepo *repositories.PlaidRepository
 }
 
-func NewTransactionsHandler(db *sql.DB) *TransactionsHandler {
-	return &TransactionsHandler{db: db}
+func NewTransactionsHandler(repo *repositories.PlaidRepository) *TransactionsHandler {
+	return &TransactionsHandler{plaidRepo: repo}
 }
 
-func RegisterTransactionRoutes(r *gin.RouterGroup, db *sql.DB) {
-	NewTransactionsHandler(db).RegisterRoutes(r)
+func RegisterTransactionRoutes(r *gin.RouterGroup, repo *repositories.PlaidRepository) {
+	NewTransactionsHandler(repo).RegisterRoutes(r)
 }
 
 func (h *TransactionsHandler) RegisterRoutes(r *gin.RouterGroup) {
 	txns := r.Group("/transactions")
 	{
 		txns.GET("", h.ListTransactions)
-		txns.GET("/:id", h.GetTransaction)
 	}
 }
 
 func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Transactions endpoint not yet implemented",
-	})
-}
+	userID, _ := c.Get("user_id")
+	uid := userID.(string)
 
-func (h *TransactionsHandler) GetTransaction(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, models.ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Transactions endpoint not yet implemented",
-	})
+	limit := 50
+	offset := 0
+	accountID := c.Query("account_id")
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 200 {
+			limit = v
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	txns, err := h.plaidRepo.GetTransactionsByUserID(uid, accountID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "database_error",
+			Message: "failed to load transactions",
+		})
+		return
+	}
+	if txns == nil {
+		txns = []*models.Transaction{}
+	}
+	c.JSON(http.StatusOK, gin.H{"transactions": txns})
 }

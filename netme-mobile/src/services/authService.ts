@@ -16,7 +16,7 @@ export interface AuthResponse {
 }
 
 class AuthService {
-  private api: AxiosInstance;
+  api: AxiosInstance;
   private isRefreshing = false;
   private refreshSubscribers: ((token: string) => void)[] = [];
 
