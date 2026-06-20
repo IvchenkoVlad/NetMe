@@ -2,265 +2,62 @@ package handlers
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
-	"net/mail"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
 )
 
 type AuthHandler struct {
-	userRepo        repositories.UserRepo
-	tokenRepo       repositories.TokenRepo
-	jwtService      *services.JWTService
-	passwordService *services.PasswordService
-	googleVerifier  services.GoogleVerifier
+	authSvc *services.AuthService
 }
 
-func NewAuthHandler(userRepo repositories.UserRepo, tokenRepo repositories.TokenRepo, jwtSvc *services.JWTService, googleVerifier services.GoogleVerifier) *AuthHandler {
-	return &AuthHandler{
-		userRepo:        userRepo,
-		tokenRepo:       tokenRepo,
-		jwtService:      jwtSvc,
-		passwordService: services.NewPasswordService(),
-		googleVerifier:  googleVerifier,
-	}
+func NewAuthHandler(authSvc *services.AuthService) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
-
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if parsed, err := mail.ParseAddress(req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: "invalid email address",
-		})
-		return
-	} else {
-		req.Email = parsed.Address
-	}
-
-	existingUser, _ := h.userRepo.GetUserByEmail(req.Email)
-	if existingUser != nil {
-		c.JSON(http.StatusConflict, models.ErrorResponse{
-			Error:   "user_exists",
-			Message: "User with this email already exists",
-		})
-		return
-	}
-
-	passwordHash, err := h.passwordService.HashPassword(req.Password)
+	resp, err := h.authSvc.Register(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "hash_error",
-			Message: "Failed to hash password",
-		})
+		c.JSON(authErrStatus(err), authErrBody(err))
 		return
 	}
-
-	user, err := h.userRepo.CreateUser(req.Email, passwordHash)
-	if err != nil {
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
-			c.JSON(http.StatusConflict, models.ErrorResponse{
-				Error:   "user_exists",
-				Message: "User with this email already exists",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "creation_error",
-			Message: "Failed to create user",
-		})
-		return
-	}
-
-	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate token"})
-		return
-	}
-
-	refreshTokenString, err := h.jwtService.GenerateRefreshToken()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
-		return
-	}
-
-	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
-		return
-	}
-
-	user.PasswordHash = ""
-	c.JSON(http.StatusCreated, models.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken.Token,
-		ExpiresIn:    900,
-		User:         user,
-	})
+	c.JSON(http.StatusCreated, resp)
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
-
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if parsed, err := mail.ParseAddress(req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: "invalid email address",
-		})
-		return
-	} else {
-		req.Email = parsed.Address
-	}
-
-	user, err := h.userRepo.GetUserByEmail(req.Email)
+	resp, err := h.authSvc.Login(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "invalid_credentials",
-			Message: "Invalid email or password",
-		})
+		c.JSON(authErrStatus(err), authErrBody(err))
 		return
 	}
-
-	if user.PasswordHash == "" {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "invalid_credentials",
-			Message: "No password set for this account",
-		})
-		return
-	}
-
-	if err := h.passwordService.VerifyPassword(user.PasswordHash, req.Password); err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "invalid_credentials",
-			Message: "Invalid email or password",
-		})
-		return
-	}
-
-	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate token"})
-		return
-	}
-
-	refreshTokenString, err := h.jwtService.GenerateRefreshToken()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
-		return
-	}
-
-	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
-		return
-	}
-
-	if err := h.userRepo.UpdateLastLogin(user.ID); err != nil {
-		slog.Warn("failed to update last login", "user_id", user.ID, "error", err)
-	}
-
-	user.PasswordHash = ""
-	c.JSON(http.StatusOK, models.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken.Token,
-		ExpiresIn:    900,
-		User:         user,
-	})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req models.RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
-
-	valid, err := h.tokenRepo.IsRefreshTokenValid(req.RefreshToken)
-	if !valid || err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "invalid_token",
-			Message: "Refresh token is invalid or expired",
-		})
-		return
-	}
-
-	refreshTokenRecord, err := h.tokenRepo.GetRefreshToken(req.RefreshToken)
+	resp, err := h.authSvc.Refresh(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "invalid_token",
-			Message: "Refresh token not found",
-		})
+		c.JSON(http.StatusUnauthorized, errResp("invalid_token", "Refresh token is invalid or expired"))
 		return
 	}
-
-	user, err := h.userRepo.GetUserByID(refreshTokenRecord.UserID)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "user_not_found",
-			Message: "User not found",
-		})
-		return
-	}
-
-	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate token"})
-		return
-	}
-
-	// Rotate: create new refresh token before revoking old one
-	newRefreshTokenString, err := h.jwtService.GenerateRefreshToken()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
-		return
-	}
-
-	newRefreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, newRefreshTokenString, time.Now().Add(7*24*time.Hour))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
-		return
-	}
-
-	// Revoke old token — log failure but don't block (old token expires naturally)
-	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken, user.ID); err != nil {
-		slog.Warn("failed to revoke old refresh token during rotation", "user_id", user.ID, "error", err)
-	}
-
-	user.PasswordHash = ""
-	c.JSON(http.StatusOK, models.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken.Token,
-		ExpiresIn:    900,
-		User:         user,
-	})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
@@ -268,22 +65,13 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
-
-	userID := c.GetString("user_id")
-	if err := h.tokenRepo.RevokeRefreshToken(req.RefreshToken, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "revoke_error",
-			Message: "Failed to revoke token",
-		})
+	if err := h.authSvc.Logout(req.RefreshToken, c.GetString("user_id")); err != nil {
+		c.JSON(http.StatusInternalServerError, errResp("revoke_error", "Failed to revoke token"))
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged out"})
 }
 
@@ -292,52 +80,53 @@ func (h *AuthHandler) GoogleAuth(c *gin.Context) {
 		IDToken string `json:"id_token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
-
-	googleID, email, err := h.googleVerifier.Validate(c.Request.Context(), req.IDToken, "")
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid_token", Message: "Failed to verify Google token"})
-		return
-	}
-
-	user, err := h.userRepo.FindOrCreateGoogleUser(googleID, email)
+	resp, err := h.authSvc.GoogleAuth(c.Request.Context(), req.IDToken)
 	if err != nil {
 		if errors.Is(err, repositories.ErrEmailTakenByOtherProvider) {
-			c.JSON(http.StatusConflict, models.ErrorResponse{
-				Error:   "email_conflict",
-				Message: "An account with this email already exists. Please log in with your password.",
-			})
+			c.JSON(http.StatusConflict, errResp("email_conflict", "An account with this email already exists. Please log in with your password."))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: "Failed to sign in with Google"})
+		c.JSON(http.StatusUnauthorized, errResp("invalid_token", "Failed to verify Google token"))
 		return
 	}
+	c.JSON(http.StatusOK, resp)
+}
 
-	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate token"})
-		return
+func errResp(code, msg string) models.ErrorResponse {
+	return models.ErrorResponse{Error: code, Message: msg}
+}
+
+func authErrStatus(err error) int {
+	switch {
+	case errors.Is(err, services.ErrUserExists):
+		return http.StatusConflict
+	case errors.Is(err, services.ErrInvalidCredentials),
+		errors.Is(err, services.ErrNoPassword),
+		errors.Is(err, services.ErrInvalidToken):
+		return http.StatusUnauthorized
+	case errors.Is(err, services.ErrInvalidEmail):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
 	}
+}
 
-	refreshTokenString, err := h.jwtService.GenerateRefreshToken()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to generate refresh token"})
-		return
+func authErrBody(err error) models.ErrorResponse {
+	switch {
+	case errors.Is(err, services.ErrUserExists):
+		return errResp("user_exists", "User with this email already exists")
+	case errors.Is(err, services.ErrInvalidCredentials):
+		return errResp("invalid_credentials", "Invalid email or password")
+	case errors.Is(err, services.ErrNoPassword):
+		return errResp("invalid_credentials", "No password set for this account")
+	case errors.Is(err, services.ErrInvalidToken):
+		return errResp("invalid_token", "Invalid or expired token")
+	case errors.Is(err, services.ErrInvalidEmail):
+		return errResp("invalid_request", "Invalid email address")
+	default:
+		return errResp("internal_error", "An unexpected error occurred")
 	}
-
-	refreshToken, err := h.tokenRepo.CreateRefreshToken(user.ID, refreshTokenString, time.Now().Add(7*24*time.Hour))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "token_error", Message: "Failed to store refresh token"})
-		return
-	}
-
-	user.PasswordHash = ""
-	c.JSON(http.StatusOK, models.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken.Token,
-		ExpiresIn:    900,
-		User:         user,
-	})
 }

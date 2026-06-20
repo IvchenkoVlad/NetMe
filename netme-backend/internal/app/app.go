@@ -51,9 +51,12 @@ func New() (*App, error) {
 		os.Getenv("PLAID_CLIENT_ID"),
 		os.Getenv("PLAID_SECRET"),
 		os.Getenv("PLAID_ENV"),
+		plaidRepo,
 	)
 
-	authHandler := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, googleVerifier)
+	authSvc := services.NewAuthService(userRepo, tokenRepo, jwtSvc, googleVerifier)
+
+	authHandler := handlers.NewAuthHandler(authSvc)
 	usersHandler := handlers.NewUsersHandler(userRepo)
 
 	router := gin.Default()

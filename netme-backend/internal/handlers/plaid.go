@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	plaidgo "github.com/plaid/plaid-go/v42/plaid"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
@@ -29,171 +28,50 @@ func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *servi
 		plaid.POST("/sync", h.SyncTransactions)
 		plaid.GET("/items", h.ListItems)
 	}
-	// link-page is public — the link_token itself is the credential
 	public.GET("/plaid/link-page", h.LinkPage)
 }
 
 func (h *PlaidHandler) CreateLinkToken(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
-	token, err := h.plaidSvc.CreateLinkToken(c.Request.Context(), uid)
+	token, err := h.plaidSvc.CreateLinkToken(c.Request.Context(), c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "plaid_error",
-			Message: "failed to create link token",
-		})
+		c.JSON(http.StatusInternalServerError, errResp("plaid_error", "failed to create link token"))
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"link_token": token})
 }
 
 func (h *PlaidHandler) ExchangeToken(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
 	var req struct {
 		PublicToken     string `json:"public_token" binding:"required"`
 		InstitutionID   string `json:"institution_id"`
 		InstitutionName string `json:"institution_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	accessToken, itemID, err := h.plaidSvc.ExchangePublicToken(ctx, req.PublicToken)
+	item, err := h.plaidSvc.ExchangeAndStore(c.Request.Context(), c.GetString("user_id"), req.PublicToken, req.InstitutionID, req.InstitutionName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "plaid_error",
-			Message: "failed to exchange token",
-		})
+		c.JSON(http.StatusInternalServerError, errResp("plaid_error", "failed to exchange token"))
 		return
 	}
-
-	var instID, instName *string
-	if req.InstitutionID != "" {
-		instID = &req.InstitutionID
-	}
-	if req.InstitutionName != "" {
-		instName = &req.InstitutionName
-	}
-
-	item, err := h.plaidRepo.CreateItem(uid, itemID, accessToken, instID, instName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "database_error",
-			Message: "failed to store item",
-		})
-		return
-	}
-
-	// Immediately fetch and store accounts
-	plaidAccounts, err := h.plaidSvc.GetAccounts(ctx, accessToken)
-	if err == nil {
-		h.plaidRepo.LogRawEvent(uid, "exchange_accounts", plaidAccounts)
-		for _, pa := range plaidAccounts {
-			a := accountFromPlaid(uid, item.ID, pa)
-			_ = h.plaidRepo.UpsertAccount(a)
-		}
-	}
-
-	h.plaidRepo.LogRawEvent(uid, "exchange", map[string]any{
-		"item_id":          itemID,
-		"institution_id":   req.InstitutionID,
-		"institution_name": req.InstitutionName,
-	})
-
 	c.JSON(http.StatusOK, gin.H{"item": item})
 }
 
 func (h *PlaidHandler) SyncTransactions(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
-	ctx := c.Request.Context()
-
-	items, err := h.plaidRepo.GetAllItemsForSync(uid)
+	totalAdded, err := h.plaidSvc.SyncForUser(c.Request.Context(), c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "database_error",
-			Message: "failed to load items",
-		})
+		c.JSON(http.StatusInternalServerError, errResp("database_error", "failed to load items"))
 		return
 	}
-
-	totalAdded := 0
-	for _, entry := range items {
-		cursor := ""
-		if entry.Item.Cursor != nil {
-			cursor = *entry.Item.Cursor
-		}
-
-		for {
-			result, err := h.plaidSvc.SyncTransactions(ctx, entry.AccessToken, cursor)
-			if err != nil {
-				h.plaidRepo.LogRawEvent(uid, "sync_error", map[string]any{"error": err.Error(), "item_id": entry.Item.PlaidItemID})
-				break
-			}
-
-			h.plaidRepo.LogRawEvent(uid, "sync_result", map[string]any{
-				"item_id":     entry.Item.PlaidItemID,
-				"added":       result.Added,
-				"modified":    result.Modified,
-				"removed":     result.Removed,
-				"next_cursor": result.NextCursor,
-				"has_more":    result.HasMore,
-			})
-
-			for _, pt := range result.Added {
-				account, err := h.plaidRepo.GetAccountByPlaidID(pt.GetAccountId())
-				if err != nil {
-					continue
-				}
-				_ = h.plaidRepo.UpsertTransaction(txnFromPlaid(uid, account.ID, pt))
-				totalAdded++
-			}
-			for _, pt := range result.Modified {
-				account, err := h.plaidRepo.GetAccountByPlaidID(pt.GetAccountId())
-				if err != nil {
-					continue
-				}
-				_ = h.plaidRepo.UpsertTransaction(txnFromPlaid(uid, account.ID, pt))
-			}
-			for _, rt := range result.Removed {
-				_ = h.plaidRepo.RemoveTransaction(rt.GetTransactionId())
-			}
-
-			cursor = result.NextCursor
-			if !result.HasMore {
-				break
-			}
-		}
-
-		if cursor != "" {
-			_ = h.plaidRepo.UpdateCursor(entry.Item.ID, cursor)
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{"transactions_added": totalAdded})
 }
 
 func (h *PlaidHandler) ListItems(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
-	items, err := h.plaidRepo.GetItemsByUserID(uid)
+	items, err := h.plaidRepo.GetItemsByUserID(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "database_error",
-			Message: "failed to load items",
-		})
+		c.JSON(http.StatusInternalServerError, errResp("database_error", "failed to load items"))
 		return
 	}
 	if items == nil {
@@ -256,69 +134,4 @@ func (h *PlaidHandler) LinkPage(c *gin.Context) {
 </html>`, token)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(http.StatusOK, html)
-}
-
-func accountFromPlaid(userID, plaidItemID string, pa plaidgo.AccountBase) *models.Account {
-	a := &models.Account{
-		UserID:         userID,
-		PlaidItemID:    plaidItemID,
-		PlaidAccountID: pa.GetAccountId(),
-		Name:           pa.GetName(),
-		Type:           string(pa.GetType()),
-		CurrencyCode:   "USD",
-	}
-	if name := pa.GetOfficialName(); name != "" {
-		a.OfficialName = &name
-	}
-	if sub := string(pa.GetSubtype()); sub != "" {
-		a.Subtype = &sub
-	}
-	if mask := pa.GetMask(); mask != "" {
-		a.Mask = &mask
-	}
-	balances := pa.GetBalances()
-	if cur := balances.GetCurrent(); cur != 0 {
-		a.CurrentBalance = &cur
-	}
-	if avail := balances.GetAvailable(); avail != 0 {
-		a.AvailableBalance = &avail
-	}
-	if code := balances.GetIsoCurrencyCode(); code != "" {
-		a.CurrencyCode = code
-	}
-	return a
-}
-
-func txnFromPlaid(userID, accountID string, pt plaidgo.Transaction) *models.Transaction {
-	t := &models.Transaction{
-		UserID:             userID,
-		AccountID:          accountID,
-		PlaidTransactionID: pt.GetTransactionId(),
-		Amount:             pt.GetAmount(),
-		CurrencyCode:       "USD",
-		Name:               pt.GetName(),
-		Date:               pt.GetDate(),
-		Pending:            pt.GetPending(),
-	}
-	if code := pt.GetIsoCurrencyCode(); code != "" {
-		t.CurrencyCode = code
-	}
-	if m := pt.GetMerchantName(); m != "" {
-		t.MerchantName = &m
-	}
-	if d := string(pt.GetAuthorizedDate()); d != "" && d != "0001-01-01" {
-		t.AuthorizedDate = &d
-	}
-	if ch := string(pt.GetPaymentChannel()); ch != "" {
-		t.PaymentChannel = &ch
-	}
-	if cats := pt.GetPersonalFinanceCategory(); true {
-		if pri := cats.GetPrimary(); pri != "" {
-			t.Category = &pri
-		}
-		if det := cats.GetDetailed(); det != "" {
-			t.CategoryDetailed = &det
-		}
-	}
-	return t
 }
