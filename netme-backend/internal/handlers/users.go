@@ -6,14 +6,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
+	"github.com/vladyslavivchenko/netme/internal/services"
 )
 
 type UsersHandler struct {
-	userRepo repositories.UserRepo
+	userRepo  repositories.UserRepo
+	plaidSvc  *services.PlaidService
 }
 
-func NewUsersHandler(userRepo repositories.UserRepo) *UsersHandler {
-	return &UsersHandler{userRepo: userRepo}
+func NewUsersHandler(userRepo repositories.UserRepo, plaidSvc *services.PlaidService) *UsersHandler {
+	return &UsersHandler{userRepo: userRepo, plaidSvc: plaidSvc}
 }
 
 func (h *UsersHandler) GetMe(c *gin.Context) {
@@ -47,7 +49,15 @@ func (h *UsersHandler) DeleteMe(c *gin.Context) {
 		return
 	}
 
-	if err := h.userRepo.DeleteUser(userIDVal.(string)); err != nil {
+	userID := userIDVal.(string)
+
+	// Revoke all Plaid connections before removing the user from the database.
+	// Required for CCPA/GDPR compliance and Plaid developer agreement.
+	if h.plaidSvc != nil {
+		h.plaidSvc.RevokeAllItems(c.Request.Context(), userID)
+	}
+
+	if err := h.userRepo.DeleteUser(userID); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "delete_error",
 			Message: "Failed to delete account",

@@ -27,9 +27,10 @@ export const plaidService = {
     return data.accounts || [];
   },
 
-  getTransactions: async (limit = 50, offset = 0, accountId = '') => {
+  getTransactions: async (limit = 50, offset = 0, accountId = '', month = '') => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (accountId) params.set('account_id', accountId);
+    if (month) params.set('month', month);
     const { data } = await api.get(`/transactions?${params}`);
     return data.transactions || [];
   },

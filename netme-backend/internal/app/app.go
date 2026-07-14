@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -8,8 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vladyslavivchenko/netme/internal/crypto"
 	"github.com/vladyslavivchenko/netme/internal/db"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
+	"github.com/vladyslavivchenko/netme/internal/jobs"
 	"github.com/vladyslavivchenko/netme/internal/middleware"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 	"github.com/vladyslavivchenko/netme/internal/services"
@@ -37,9 +40,17 @@ func New() (*App, error) {
 	}
 	log.Info("database connected")
 
+	plaidKey, err := crypto.ParseKey(os.Getenv("PLAID_TOKEN_ENCRYPTION_KEY"))
+	if err != nil {
+		return nil, fmt.Errorf("plaid encryption key: %w", err)
+	}
+	if plaidKey == nil {
+		log.Warn("PLAID_TOKEN_ENCRYPTION_KEY not set — Plaid access tokens stored unencrypted")
+	}
+
 	userRepo := repositories.NewUserRepository(database)
 	tokenRepo := repositories.NewTokenRepository(database)
-	plaidRepo := repositories.NewPlaidRepository(database)
+	plaidRepo := repositories.NewPlaidRepository(database, plaidKey)
 	budgetRepo := repositories.NewBudgetRepository(database)
 	rulesRepo := repositories.NewRulesRepository(database)
 
@@ -53,14 +64,16 @@ func New() (*App, error) {
 		os.Getenv("PLAID_SECRET"),
 		os.Getenv("PLAID_ENV"),
 		plaidRepo,
+		rulesRepo,
 	)
 
 	authSvc := services.NewAuthService(userRepo, tokenRepo, jwtSvc, googleVerifier)
 
 	authHandler := handlers.NewAuthHandler(authSvc)
-	usersHandler := handlers.NewUsersHandler(userRepo)
+	usersHandler := handlers.NewUsersHandler(userRepo, plaidSvc)
 
 	router := gin.Default()
+	router.Use(middleware.HTTPSRedirect(os.Getenv("API_ENV")))
 	router.Use(middleware.CORSMiddleware())
 	router.GET("/healthz", handlers.HealthHandler())
 
@@ -85,7 +98,11 @@ func New() (*App, error) {
 		handlers.RegisterPlaidRoutes(protected, v1, plaidSvc, plaidRepo)
 		handlers.RegisterBudgetRoutes(protected, budgetRepo)
 		handlers.RegisterRulesRoutes(protected, rulesRepo)
+		handlers.RegisterAnalyticsRoutes(protected, plaidRepo, budgetRepo)
 	}
+
+	scheduler := jobs.NewScheduler(plaidSvc, plaidRepo, log)
+	go scheduler.Start(context.Background())
 
 	return &App{
 		db:     database,

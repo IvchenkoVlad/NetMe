@@ -57,7 +57,7 @@ func (m *mockTxnRepo) PatchTransactionCategory(userID, txnID, categoryID string)
 	return t, nil
 }
 
-func (m *mockTxnRepo) GetTransactionsByUserID(userID, accountID string, limit, offset int) ([]*models.Transaction, error) {
+func (m *mockTxnRepo) GetTransactionsByUserID(userID, accountID, month string, limit, offset int) ([]*models.Transaction, error) {
 	return nil, nil
 }
 

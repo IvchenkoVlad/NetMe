@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { PlaidLinkModal } from './PlaidLinkScreen';
+import { PlaidConsentModal } from './PlaidConsentModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -420,6 +421,7 @@ export const AccountsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const [showPlaid, setShowPlaid] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('byBank');
@@ -527,12 +529,17 @@ export const AccountsScreen: React.FC = () => {
 
       <FAB
         banks={banks}
-        onConnectBank={() => setShowPlaid(true)}
+        onConnectBank={() => setShowConsent(true)}
         onSync={handleSync}
         syncing={syncing}
         insetBottom={insets.bottom}
       />
 
+      <PlaidConsentModal
+        visible={showConsent}
+        onAccept={() => { setShowConsent(false); setShowPlaid(true); }}
+        onDecline={() => setShowConsent(false)}
+      />
       <PlaidLinkModal visible={showPlaid} onSuccess={handlePlaidSuccess} onClose={() => setShowPlaid(false)} />
       {selectedAccount && <AccountTransactionsModal account={selectedAccount} onClose={() => setSelectedAccount(null)} focusVersion={focusVersion} />}
     </View>

@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
-  Image,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
@@ -49,29 +48,12 @@ export const ProfileScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.profileCard}>
-          {user?.picture_url ? (
-            <Image
-              source={{ uri: user.picture_url }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <View style={styles.profileImagePlaceholder}>
-              <Text style={styles.profileImagePlaceholderText}>
-                {user?.email?.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-
-          <Text style={styles.displayName}>
-            {user?.display_name || user?.email}
-          </Text>
-          <Text style={styles.email}>{user?.email}</Text>
-
-          {user?.last_login_at && (
-            <Text style={styles.lastLogin}>
-              Last login: {new Date(user.last_login_at).toLocaleDateString()}
+          <View style={styles.profileImagePlaceholder}>
+            <Text style={styles.profileImagePlaceholderText}>
+              {user?.email?.charAt(0).toUpperCase()}
             </Text>
-          )}
+          </View>
+          <Text style={styles.displayName}>{user?.email}</Text>
         </View>
 
         <View style={styles.section}>
@@ -129,12 +111,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 16,
-  },
   profileImagePlaceholder: {
     width: 80,
     height: 80,
@@ -159,11 +135,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 12,
-  },
-  lastLogin: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 8,
   },
   section: {
     backgroundColor: '#fff',

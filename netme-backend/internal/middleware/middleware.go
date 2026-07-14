@@ -10,6 +10,21 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/services"
 )
 
+// HTTPSRedirect redirects plain HTTP requests to HTTPS in production.
+// It checks the X-Forwarded-Proto header set by load balancers / reverse proxies.
+// No-op in non-production environments.
+func HTTPSRedirect(env string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if env == "production" && c.GetHeader("X-Forwarded-Proto") == "http" {
+			target := "https://" + c.Request.Host + c.Request.RequestURI
+			c.Redirect(http.StatusMovedPermanently, target)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func CORSMiddleware() gin.HandlerFunc {
 	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {

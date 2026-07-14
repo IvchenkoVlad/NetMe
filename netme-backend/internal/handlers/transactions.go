@@ -4,15 +4,18 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 )
 
+var reTxnMonth = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
+
 // TxnRepo is the subset of PlaidRepository used by transaction handlers.
 type TxnRepo interface {
-	GetTransactionsByUserID(userID, accountID string, limit, offset int) ([]*models.Transaction, error)
+	GetTransactionsByUserID(userID, accountID, month string, limit, offset int) ([]*models.Transaction, error)
 	GetTransactionByID(userID, id string) (*models.Transaction, error)
 	PatchTransactionCategory(userID, txnID, categoryID string) (*models.Transaction, error)
 }
@@ -50,6 +53,14 @@ func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
 	limit := 50
 	offset := 0
 	accountID := c.Query("account_id")
+	month := c.Query("month")
+	if month != "" && !reTxnMonth.MatchString(month) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_month",
+			Message: "month must be in YYYY-MM format (e.g. 2026-07)",
+		})
+		return
+	}
 	if l := c.Query("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 200 {
 			limit = v
@@ -61,7 +72,7 @@ func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
 		}
 	}
 
-	txns, err := h.repo.GetTransactionsByUserID(uid, accountID, limit, offset)
+	txns, err := h.repo.GetTransactionsByUserID(uid, accountID, month, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "database_error",

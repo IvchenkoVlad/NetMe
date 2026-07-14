@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +32,9 @@ func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *servi
 		plaid.GET("/items", h.ListItems)
 	}
 	public.GET("/plaid/link-page", h.LinkPage)
+	// Webhook is unauthenticated — Plaid calls it directly.
+	// TODO: add Plaid JWT signature verification before production launch.
+	public.POST("/plaid/webhook", h.Webhook)
 }
 
 func (h *PlaidHandler) CreateLinkToken(c *gin.Context) {
@@ -78,6 +84,76 @@ func (h *PlaidHandler) ListItems(c *gin.Context) {
 		items = []*models.PlaidItem{}
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// Webhook handles incoming Plaid webhook events.
+// It responds immediately with 200 and processes the event asynchronously.
+//
+// Supported event types:
+//   - TRANSACTIONS / SYNC_UPDATES_AVAILABLE, DEFAULT_UPDATE, INITIAL_UPDATE → trigger item sync
+//   - ITEM / ERROR → log for investigation
+func (h *PlaidHandler) Webhook(c *gin.Context) {
+	// Read raw body so we can verify the signature before parsing.
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	if err := h.plaidSvc.WebhookVerifier.Verify(
+		c.GetHeader("Plaid-Verification"), body,
+	); err != nil {
+		c.JSON(http.StatusUnauthorized, errResp("invalid_signature", err.Error()))
+		return
+	}
+
+	var payload struct {
+		WebhookType string `json:"webhook_type"`
+		WebhookCode string `json:"webhook_code"`
+		ItemID      string `json:"item_id"`
+		Error       *struct {
+			ErrorType    string `json:"error_type"`
+			ErrorCode    string `json:"error_code"`
+			ErrorMessage string `json:"error_message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	h.plaidRepo.LogRawEvent("", "webhook_received", map[string]any{
+		"type": payload.WebhookType,
+		"code": payload.WebhookCode,
+		"item": payload.ItemID,
+	})
+
+	// Respond immediately so Plaid doesn't retry.
+	c.Status(http.StatusOK)
+
+	go func() {
+		ctx := context.Background()
+		switch payload.WebhookType {
+		case "TRANSACTIONS":
+			switch payload.WebhookCode {
+			case "SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "RECURRING_TRANSACTIONS_UPDATE":
+				item, _, err := h.plaidRepo.GetItemByPlaidItemID(payload.ItemID)
+				if err != nil {
+					return
+				}
+				_, _ = h.plaidSvc.SyncItem(ctx, item.UserID, item.ID)
+			}
+		case "ITEM":
+			if payload.Error != nil {
+				h.plaidRepo.LogRawEvent("", "webhook_item_error", map[string]any{
+					"item_id":       payload.ItemID,
+					"error_type":    payload.Error.ErrorType,
+					"error_code":    payload.Error.ErrorCode,
+					"error_message": payload.Error.ErrorMessage,
+				})
+			}
+		}
+	}()
 }
 
 func (h *PlaidHandler) LinkPage(c *gin.Context) {

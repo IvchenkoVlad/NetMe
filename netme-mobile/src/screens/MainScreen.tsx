@@ -17,11 +17,13 @@ import { useNavigation } from '@react-navigation/native';
 import { HomeScreen } from './HomeScreen';
 import { AccountsScreen } from './AccountsScreen';
 import { BudgetScreen } from './BudgetScreen';
+import { TransactionsScreen } from './TransactionsScreen';
 
 const { width: W } = Dimensions.get('window');
 
 const TABS = [
   { label: 'Home', screen: <HomeScreen /> },
+  { label: 'Transactions', screen: <TransactionsScreen /> },
   { label: 'Accounts', screen: <AccountsScreen /> },
   { label: 'Budget', screen: <BudgetScreen /> },
 ];

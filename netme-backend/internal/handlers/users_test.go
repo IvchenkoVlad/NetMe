@@ -14,7 +14,7 @@ import (
 
 func newUsersRouter(userRepo *mockUserRepo) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	h := handlers.NewUsersHandler(userRepo)
+	h := handlers.NewUsersHandler(userRepo, nil)
 	r := gin.New()
 	// Simulate AuthMiddleware setting user_id
 	r.GET("/v1/me", func(c *gin.Context) {

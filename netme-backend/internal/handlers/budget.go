@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -9,6 +10,25 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
+
+var reMonth = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
+
+// parseMonth returns the query param month if valid (YYYY-MM), the current month
+// if empty, or an error string if the format is wrong.
+func parseMonth(c *gin.Context) (string, bool) {
+	m := c.Query("month")
+	if m == "" {
+		return currentMonth(), true
+	}
+	if !reMonth.MatchString(m) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_month",
+			Message: "month must be in YYYY-MM format (e.g. 2026-07)",
+		})
+		return "", false
+	}
+	return m, true
+}
 
 type BudgetHandler struct {
 	repo *repositories.BudgetRepository
@@ -45,9 +65,9 @@ func currentMonth() string {
 
 // GET /v1/budget/summary?month=2026-06
 func (h *BudgetHandler) GetSummary(c *gin.Context) {
-	month := c.Query("month")
-	if month == "" {
-		month = currentMonth()
+	month, ok := parseMonth(c)
+	if !ok {
+		return
 	}
 	summary, err := h.repo.BuildSummary(uid(c), month)
 	if err != nil {
@@ -158,9 +178,9 @@ func (h *BudgetHandler) DeleteCategory(c *gin.Context) {
 
 // PUT /v1/budget/:category_id?month=2026-06
 func (h *BudgetHandler) SetBudget(c *gin.Context) {
-	month := c.Query("month")
-	if month == "" {
-		month = currentMonth()
+	month, ok := parseMonth(c)
+	if !ok {
+		return
 	}
 	var req struct {
 		Amount float64 `json:"amount" binding:"required"`

@@ -175,6 +175,63 @@ func (r *BudgetRepository) GetMonthlyHistory(userID string, months int) ([]model
 	return result, rows.Err()
 }
 
+// GetTopCategories returns the top N spending categories for a given month.
+// It reuses BuildSummary's category-mapping logic via a dedicated SQL query for efficiency.
+func (r *BudgetRepository) GetTopCategories(userID, month string, limit int) ([]models.TopCategory, error) {
+	if err := r.EnsureCategories(userID); err != nil {
+		return nil, err
+	}
+
+	summary, err := r.BuildSummary(userID, month)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalSpending float64
+	for _, c := range summary.Categories {
+		if !c.IsIncome && c.Spent > 0 {
+			totalSpending += c.Spent
+		}
+	}
+
+	// Sort by spent descending; take top N
+	top := make([]models.TopCategory, 0, limit)
+	// Simple selection: iterate sorted slice (categories already ordered by sort_order, re-sort by spent)
+	type catSpent struct {
+		cat   models.CategorySummary
+	}
+	candidates := make([]catSpent, 0, len(summary.Categories))
+	for _, c := range summary.Categories {
+		if !c.IsIncome && c.Spent > 0 {
+			candidates = append(candidates, catSpent{c})
+		}
+	}
+	// Insertion sort (small N)
+	for i := 1; i < len(candidates); i++ {
+		for j := i; j > 0 && candidates[j].cat.Spent > candidates[j-1].cat.Spent; j-- {
+			candidates[j], candidates[j-1] = candidates[j-1], candidates[j]
+		}
+	}
+	for i, c := range candidates {
+		if i >= limit {
+			break
+		}
+		pct := 0.0
+		if totalSpending > 0 {
+			pct = c.cat.Spent / totalSpending * 100
+		}
+		top = append(top, models.TopCategory{
+			CategoryID: c.cat.ID,
+			Name:       c.cat.Name,
+			Icon:       c.cat.Icon,
+			Color:      c.cat.Color,
+			Spent:      c.cat.Spent,
+			Pct:        pct,
+		})
+	}
+	return top, nil
+}
+
 // EnsureCategories seeds defaults if user has none yet.
 func (r *BudgetRepository) EnsureCategories(userID string) error {
 	has, err := r.HasCategories(userID)

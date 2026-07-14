@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/models"
@@ -84,6 +85,48 @@ func (r *RulesRepository) List(userID string) ([]*models.CategoryRule, error) {
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()
+}
+
+// ApplyCategoryRules runs two bulk SQL updates for a user after a transaction sync:
+//  1. Apply merchant rules (highest priority — user-defined).
+//  2. Apply Plaid primary category → user category mapping for any still-uncategorized transactions.
+//
+// Only non-pending transactions without an existing category_id override are touched.
+func (r *RulesRepository) ApplyCategoryRules(userID string) error {
+	// Pass 1: merchant rules.
+	_, err := r.db.Exec(
+		`UPDATE transactions t
+		 SET category_id = cr.category_id, updated_at = now()
+		 FROM category_rules cr
+		 WHERE t.user_id = $1
+		   AND cr.user_id = $1
+		   AND t.category_id IS NULL
+		   AND t.pending = false
+		   AND LOWER(TRIM(COALESCE(t.merchant_name, t.name))) = cr.normalized_merchant`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("apply merchant rules: %w", err)
+	}
+
+	// Pass 2: Plaid category → user category mapping.
+	_, err = r.db.Exec(
+		`UPDATE transactions t
+		 SET category_id = c.id, updated_at = now()
+		 FROM categories c
+		 WHERE t.user_id = $1
+		   AND c.user_id = $1
+		   AND t.category_id IS NULL
+		   AND t.pending = false
+		   AND t.category IS NOT NULL
+		   AND t.category = ANY(c.plaid_primary_categories)`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("apply plaid category mapping: %w", err)
+	}
+
+	return nil
 }
 
 func (r *RulesRepository) Delete(userID, id string) error {

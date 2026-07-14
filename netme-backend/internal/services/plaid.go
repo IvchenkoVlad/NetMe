@@ -10,8 +10,10 @@ import (
 )
 
 type PlaidService struct {
-	client    *plaid.APIClient
-	plaidRepo *repositories.PlaidRepository
+	client          *plaid.APIClient
+	plaidRepo       *repositories.PlaidRepository
+	rulesRepo       *repositories.RulesRepository
+	WebhookVerifier *WebhookVerifier
 }
 
 type SyncResult struct {
@@ -22,7 +24,7 @@ type SyncResult struct {
 	HasMore    bool
 }
 
-func NewPlaidService(clientID, secret, env string, repo *repositories.PlaidRepository) *PlaidService {
+func NewPlaidService(clientID, secret, env string, repo *repositories.PlaidRepository, rulesRepo *repositories.RulesRepository) *PlaidService {
 	cfg := plaid.NewConfiguration()
 	cfg.AddDefaultHeader("PLAID-CLIENT-ID", clientID)
 	cfg.AddDefaultHeader("PLAID-SECRET", secret)
@@ -33,7 +35,13 @@ func NewPlaidService(clientID, secret, env string, repo *repositories.PlaidRepos
 		cfg.UseEnvironment(plaid.Sandbox)
 	}
 
-	return &PlaidService{client: plaid.NewAPIClient(cfg), plaidRepo: repo}
+	client := plaid.NewAPIClient(cfg)
+	return &PlaidService{
+		client:          client,
+		plaidRepo:       repo,
+		rulesRepo:       rulesRepo,
+		WebhookVerifier: NewWebhookVerifier(client, env),
+	}
 }
 
 func (s *PlaidService) CreateLinkToken(ctx context.Context, userID string) (string, error) {
@@ -87,6 +95,71 @@ func (s *PlaidService) ExchangeAndStore(ctx context.Context, userID, publicToken
 	return item, nil
 }
 
+// SyncItem syncs a single Plaid item identified by its internal UUID.
+// Used by the webhook handler so only the affected item is synced.
+func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (int, error) {
+	item, accessToken, err := s.plaidRepo.GetItemByID(itemUUID)
+	if err != nil {
+		return 0, fmt.Errorf("load item: %w", err)
+	}
+
+	cursor := ""
+	if item.Cursor != nil {
+		cursor = *item.Cursor
+	}
+
+	totalAdded := 0
+	for {
+		result, err := s.syncPage(ctx, accessToken, cursor)
+		if err != nil {
+			s.plaidRepo.LogRawEvent(userID, "sync_error", map[string]any{
+				"error":   err.Error(),
+				"item_id": item.PlaidItemID,
+			})
+			return totalAdded, err
+		}
+
+		s.plaidRepo.LogRawEvent(userID, "webhook_sync_result", map[string]any{
+			"item_id":  item.PlaidItemID,
+			"added":    len(result.Added),
+			"modified": len(result.Modified),
+			"removed":  len(result.Removed),
+		})
+
+		for _, pt := range result.Added {
+			account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			if err != nil {
+				continue
+			}
+			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
+			totalAdded++
+		}
+		for _, pt := range result.Modified {
+			account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			if err != nil {
+				continue
+			}
+			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
+		}
+		for _, rt := range result.Removed {
+			_ = s.plaidRepo.RemoveTransaction(rt.GetTransactionId())
+		}
+
+		cursor = result.NextCursor
+		if !result.HasMore {
+			break
+		}
+	}
+
+	if cursor != "" {
+		_ = s.plaidRepo.UpdateCursor(itemUUID, cursor)
+	}
+	if s.rulesRepo != nil {
+		_ = s.rulesRepo.ApplyCategoryRules(userID)
+	}
+	return totalAdded, nil
+}
+
 func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, error) {
 	items, err := s.plaidRepo.GetAllItemsForSync(userID)
 	if err != nil {
@@ -120,7 +193,7 @@ func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, err
 			})
 
 			for _, pt := range result.Added {
-				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId())
+				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
 				if err != nil {
 					continue
 				}
@@ -128,7 +201,7 @@ func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, err
 				totalAdded++
 			}
 			for _, pt := range result.Modified {
-				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId())
+				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
 				if err != nil {
 					continue
 				}
@@ -149,7 +222,23 @@ func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, err
 		}
 	}
 
+	if s.rulesRepo != nil {
+		_ = s.rulesRepo.ApplyCategoryRules(userID)
+	}
 	return totalAdded, nil
+}
+
+// RevokeAllItems calls Plaid's /item/remove for every item owned by the user.
+// Errors are logged but do not block account deletion — the DB cascade handles cleanup.
+func (s *PlaidService) RevokeAllItems(ctx context.Context, userID string) {
+	items, err := s.plaidRepo.GetAllItemsForSync(userID)
+	if err != nil {
+		return
+	}
+	for _, entry := range items {
+		req := plaid.NewItemRemoveRequest(entry.AccessToken)
+		_, _, _ = s.client.PlaidApi.ItemRemove(ctx).ItemRemoveRequest(*req).Execute()
+	}
 }
 
 func (s *PlaidService) GetInstitution(ctx context.Context, institutionID string) (string, error) {

@@ -10,6 +10,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { MainScreen } from '../screens/MainScreen';
 import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
+import { PolicyScreen } from '../screens/PolicyScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -36,6 +37,11 @@ const AppStack = () => (
     <Stack.Screen
       name="TransactionDetail"
       component={TransactionDetailScreen}
+      options={{ presentation: 'card', animation: 'slide_from_right' }}
+    />
+    <Stack.Screen
+      name="Policy"
+      component={PolicyScreen}
       options={{ presentation: 'card', animation: 'slide_from_right' }}
     />
   </Stack.Navigator>

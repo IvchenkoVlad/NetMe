@@ -4,24 +4,44 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"github.com/vladyslavivchenko/netme/internal/crypto"
 	"github.com/vladyslavivchenko/netme/internal/models"
 )
 
 type PlaidRepository struct {
-	db *sql.DB
+	db  *sql.DB
+	key []byte // AES-256 key; nil means encryption is disabled
 }
 
-func NewPlaidRepository(db *sql.DB) *PlaidRepository {
-	return &PlaidRepository{db: db}
+func NewPlaidRepository(db *sql.DB, key []byte) *PlaidRepository {
+	return &PlaidRepository{db: db, key: key}
+}
+
+func (r *PlaidRepository) encryptToken(plain string) (string, error) {
+	if r.key == nil {
+		return plain, nil
+	}
+	return crypto.Encrypt(r.key, plain)
+}
+
+func (r *PlaidRepository) decryptToken(stored string) (string, error) {
+	if r.key == nil {
+		return stored, nil
+	}
+	return crypto.Decrypt(r.key, stored)
 }
 
 func (r *PlaidRepository) CreateItem(userID, plaidItemID, accessToken string, institutionID, institutionName *string) (*models.PlaidItem, error) {
+	storedToken, err := r.encryptToken(accessToken)
+	if err != nil {
+		return nil, err
+	}
 	item := &models.PlaidItem{}
-	err := r.db.QueryRow(
+	err = r.db.QueryRow(
 		`INSERT INTO plaid_items (user_id, plaid_item_id, access_token, institution_id, institution_name)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, user_id, plaid_item_id, institution_id, institution_name, cursor, created_at, updated_at`,
-		userID, plaidItemID, accessToken, institutionID, institutionName,
+		userID, plaidItemID, storedToken, institutionID, institutionName,
 	).Scan(&item.ID, &item.UserID, &item.PlaidItemID, &item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt)
 	return item, err
 }
@@ -48,11 +68,32 @@ func (r *PlaidRepository) GetItemsByUserID(userID string) ([]*models.PlaidItem, 
 
 func (r *PlaidRepository) GetItemByID(id string) (*models.PlaidItem, string, error) {
 	item := &models.PlaidItem{}
-	var accessToken string
+	var storedToken string
 	err := r.db.QueryRow(
 		`SELECT id, user_id, plaid_item_id, access_token, institution_id, institution_name, cursor, created_at, updated_at
 		 FROM plaid_items WHERE id = $1`, id,
-	).Scan(&item.ID, &item.UserID, &item.PlaidItemID, &accessToken, &item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt)
+	).Scan(&item.ID, &item.UserID, &item.PlaidItemID, &storedToken, &item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		return nil, "", err
+	}
+	accessToken, err := r.decryptToken(storedToken)
+	return item, accessToken, err
+}
+
+// GetItemByPlaidItemID looks up an item by the external Plaid item_id (used by webhooks).
+// Returns the item, its plaintext access token, and any error.
+func (r *PlaidRepository) GetItemByPlaidItemID(plaidItemID string) (*models.PlaidItem, string, error) {
+	item := &models.PlaidItem{}
+	var storedToken string
+	err := r.db.QueryRow(
+		`SELECT id, user_id, plaid_item_id, access_token, institution_id, institution_name, cursor, created_at, updated_at
+		 FROM plaid_items WHERE plaid_item_id = $1`, plaidItemID,
+	).Scan(&item.ID, &item.UserID, &item.PlaidItemID, &storedToken,
+		&item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		return nil, "", err
+	}
+	accessToken, err := r.decryptToken(storedToken)
 	return item, accessToken, err
 }
 
@@ -74,8 +115,12 @@ func (r *PlaidRepository) GetAllItemsForSync(userID string) ([]struct {
 	}
 	for rows.Next() {
 		item := &models.PlaidItem{}
-		var accessToken string
-		if err := rows.Scan(&item.ID, &item.UserID, &item.PlaidItemID, &accessToken, &item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var storedToken string
+		if err := rows.Scan(&item.ID, &item.UserID, &item.PlaidItemID, &storedToken, &item.InstitutionID, &item.InstitutionName, &item.Cursor, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		accessToken, err := r.decryptToken(storedToken)
+		if err != nil {
 			return nil, err
 		}
 		results = append(results, struct {
@@ -136,12 +181,12 @@ func (r *PlaidRepository) GetAccountsByUserID(userID string) ([]*models.Account,
 	return accounts, rows.Err()
 }
 
-func (r *PlaidRepository) GetAccountByPlaidID(plaidAccountID string) (*models.Account, error) {
+func (r *PlaidRepository) GetAccountByPlaidID(plaidAccountID, userID string) (*models.Account, error) {
 	a := &models.Account{}
 	err := r.db.QueryRow(
 		`SELECT id, user_id, plaid_item_id, plaid_account_id, name, official_name, type, subtype, mask,
 		        current_balance, available_balance, currency_code, created_at, updated_at
-		 FROM accounts WHERE plaid_account_id = $1`, plaidAccountID,
+		 FROM accounts WHERE plaid_account_id = $1 AND user_id = $2`, plaidAccountID, userID,
 	).Scan(&a.ID, &a.UserID, &a.PlaidItemID, &a.PlaidAccountID, &a.Name, &a.OfficialName,
 		&a.Type, &a.Subtype, &a.Mask, &a.CurrentBalance, &a.AvailableBalance, &a.CurrencyCode,
 		&a.CreatedAt, &a.UpdatedAt)
@@ -170,15 +215,17 @@ func (r *PlaidRepository) RemoveTransaction(plaidTransactionID string) error {
 	return err
 }
 
-func (r *PlaidRepository) GetTransactionsByUserID(userID, accountID string, limit, offset int) ([]*models.Transaction, error) {
+func (r *PlaidRepository) GetTransactionsByUserID(userID, accountID, month string, limit, offset int) ([]*models.Transaction, error) {
 	rows, err := r.db.Query(
 		`SELECT id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
 		        to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
 		        category, category_detailed, payment_channel, pending, category_id, created_at, updated_at
 		 FROM transactions
-		 WHERE user_id = $1 AND ($2 = '' OR account_id::text = $2)
+		 WHERE user_id = $1
+		   AND ($2 = '' OR account_id::text = $2)
+		   AND ($3 = '' OR to_char(date, 'YYYY-MM') = $3)
 		 ORDER BY date DESC, created_at DESC
-		 LIMIT $3 OFFSET $4`, userID, accountID, limit, offset)
+		 LIMIT $4 OFFSET $5`, userID, accountID, month, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +243,72 @@ func (r *PlaidRepository) GetTransactionsByUserID(userID, accountID string, limi
 		txns = append(txns, t)
 	}
 	return txns, rows.Err()
+}
+
+// GetAllUserIDsWithItems returns the distinct user IDs that have at least one Plaid item.
+func (r *PlaidRepository) GetAllUserIDsWithItems() ([]string, error) {
+	rows, err := r.db.Query(`SELECT DISTINCT user_id FROM plaid_items ORDER BY user_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// TakeNetWorthSnapshot computes current net worth for a user and stores a daily snapshot.
+// Uses ON CONFLICT to overwrite the same day's record if the job runs more than once.
+func (r *PlaidRepository) TakeNetWorthSnapshot(userID string) error {
+	nw, err := r.GetNetWorth(userID)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(
+		`INSERT INTO net_worth_snapshots (user_id, assets, liabilities, net_worth, recorded_at)
+		 VALUES ($1, $2, $3, $4, CURRENT_DATE)
+		 ON CONFLICT (user_id, recorded_at) DO UPDATE
+		   SET assets=EXCLUDED.assets, liabilities=EXCLUDED.liabilities, net_worth=EXCLUDED.net_worth`,
+		userID, nw.Assets, nw.Liabilities, nw.NetWorth,
+	)
+	return err
+}
+
+func (r *PlaidRepository) GetNetWorth(userID string) (*models.NetWorth, error) {
+	var assets, liabilities float64
+	err := r.db.QueryRow(
+		`SELECT
+		   COALESCE(SUM(CASE WHEN type IN ('depository','investment') THEN COALESCE(current_balance,0) ELSE 0 END), 0),
+		   COALESCE(SUM(CASE WHEN type IN ('credit','loan')           THEN COALESCE(current_balance,0) ELSE 0 END), 0)
+		 FROM accounts WHERE user_id = $1`, userID,
+	).Scan(&assets, &liabilities)
+	if err != nil {
+		return nil, err
+	}
+	return &models.NetWorth{
+		Assets:      assets,
+		Liabilities: liabilities,
+		NetWorth:    assets - liabilities,
+	}, nil
+}
+
+// PurgeOldRawEvents deletes raw event rows older than the given number of days.
+// Call weekly to cap table growth (GDPR Article 5(1)(e)).
+func (r *PlaidRepository) PurgeOldRawEvents(olderThanDays int) (int64, error) {
+	res, err := r.db.Exec(
+		`DELETE FROM plaid_raw_events WHERE created_at < now() - ($1::int * interval '1 day')`,
+		olderThanDays,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // LogRawEvent stores any Plaid payload for debugging. userID may be empty for webhook events.
