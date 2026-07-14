@@ -106,9 +106,11 @@ func (r *BudgetRepository) SetBudget(userID, categoryID, month string, amount fl
 
 func (r *BudgetRepository) GetTransactionsForMonth(userID, month string) ([]*models.Transaction, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
+		`SELECT id, user_id, account_id, plaid_transaction_id,
+		        amount, currency_code, name, merchant_name,
 		        to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
-		        category, category_detailed, payment_channel, pending, category_id, created_at, updated_at
+		        category, category_detailed, payment_channel,
+		        pending, category_id, created_at, updated_at
 		 FROM transactions
 		 WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2 AND pending = false
 		 ORDER BY date DESC`, userID, month)
@@ -119,11 +121,8 @@ func (r *BudgetRepository) GetTransactionsForMonth(userID, month string) ([]*mod
 
 	var txns []*models.Transaction
 	for rows.Next() {
-		t := &models.Transaction{}
-		if err := rows.Scan(&t.ID, &t.UserID, &t.AccountID, &t.PlaidTransactionID, &t.Amount, &t.CurrencyCode,
-			&t.Name, &t.MerchantName, &t.Date, &t.AuthorizedDate,
-			&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending,
-			&t.CategoryID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		t, err := scanTransaction(rows)
+		if err != nil {
 			return nil, err
 		}
 		txns = append(txns, t)
