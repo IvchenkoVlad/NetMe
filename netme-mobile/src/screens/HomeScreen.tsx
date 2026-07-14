@@ -13,18 +13,9 @@ import { useNavigation } from '@react-navigation/native';
 import { budgetService, BudgetSummary } from '../services/budgetService';
 import { plaidService } from '../services/plaidService';
 import { analyticsService, AnalyticsOverview } from '../services/analyticsService';
+import { Transaction } from '../services/transactionService';
 import { fmt, fmtDate, currentMonth } from '../utils/format';
 import { GLASS } from '../styles/theme';
-
-interface Transaction {
-  id: string;
-  name: string;
-  merchant_name?: string;
-  amount: number;
-  currency_code: string;
-  date: string;
-  pending: boolean;
-}
 
 export const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();

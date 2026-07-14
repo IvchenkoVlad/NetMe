@@ -176,13 +176,9 @@ func (r *BudgetRepository) GetMonthlyHistory(userID string, months int) ([]model
 	return result, rows.Err()
 }
 
-// GetTopCategories returns the top N spending categories for a given month.
-// It reuses BuildSummary's category-mapping logic via a dedicated SQL query for efficiency.
+// GetTopCategories returns the top N spending categories for a given month,
+// reusing BuildSummary's category-mapping logic (which also seeds defaults if needed).
 func (r *BudgetRepository) GetTopCategories(userID, month string, limit int) ([]models.TopCategory, error) {
-	if err := r.EnsureCategories(userID); err != nil {
-		return nil, err
-	}
-
 	summary, err := r.BuildSummary(userID, month)
 	if err != nil {
 		return nil, err

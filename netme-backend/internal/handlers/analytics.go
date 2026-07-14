@@ -2,12 +2,10 @@ package handlers
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
-
 )
 
 type AnalyticsHandler struct {
@@ -28,7 +26,7 @@ func RegisterAnalyticsRoutes(r *gin.RouterGroup, plaid *repositories.PlaidReposi
 // Returns net worth, 6-month spending history, and top 5 spending categories for current month.
 func (h *AnalyticsHandler) Overview(c *gin.Context) {
 	userID := uid(c)
-	month := time.Now().Format("2006-01")
+	month := currentMonth()
 
 	nw, err := h.plaid.GetNetWorth(userID)
 	if err != nil {

@@ -102,11 +102,7 @@ func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (i
 	if err != nil {
 		return 0, fmt.Errorf("load item: %w", err)
 	}
-	cursor := ""
-	if item.Cursor != nil {
-		cursor = *item.Cursor
-	}
-	added, finalCursor, err := s.drainPages(ctx, userID, item.PlaidItemID, accessToken, cursor)
+	added, finalCursor, err := s.drainPages(ctx, userID, item.PlaidItemID, accessToken, derefCursor(item.Cursor))
 	if err != nil {
 		return added, err
 	}
@@ -127,11 +123,7 @@ func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, err
 	}
 	totalAdded := 0
 	for _, entry := range items {
-		cursor := ""
-		if entry.Item.Cursor != nil {
-			cursor = *entry.Item.Cursor
-		}
-		added, finalCursor, err := s.drainPages(ctx, userID, entry.Item.PlaidItemID, entry.AccessToken, cursor)
+		added, finalCursor, err := s.drainPages(ctx, userID, entry.Item.PlaidItemID, entry.AccessToken, derefCursor(entry.Item.Cursor))
 		totalAdded += added
 		if err != nil {
 			continue // already logged inside drainPages
@@ -240,6 +232,13 @@ func (s *PlaidService) getAccounts(ctx context.Context, accessToken string) ([]p
 	return resp.GetAccounts(), nil
 }
 
+func derefCursor(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 func accountFromPlaid(userID, plaidItemID string, pa plaid.AccountBase) *models.Account {
 	a := &models.Account{
 		UserID:         userID,
@@ -294,13 +293,12 @@ func txnFromPlaid(userID, accountID string, pt plaid.Transaction) *models.Transa
 	if ch := string(pt.GetPaymentChannel()); ch != "" {
 		t.PaymentChannel = &ch
 	}
-	if cats := pt.GetPersonalFinanceCategory(); true {
-		if pri := cats.GetPrimary(); pri != "" {
-			t.Category = &pri
-		}
-		if det := cats.GetDetailed(); det != "" {
-			t.CategoryDetailed = &det
-		}
+	cats := pt.GetPersonalFinanceCategory()
+	if pri := cats.GetPrimary(); pri != "" {
+		t.Category = &pri
+	}
+	if det := cats.GetDetailed(); det != "" {
+		t.CategoryDetailed = &det
 	}
 	return t
 }

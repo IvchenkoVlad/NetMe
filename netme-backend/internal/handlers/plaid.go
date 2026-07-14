@@ -38,7 +38,7 @@ func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *servi
 }
 
 func (h *PlaidHandler) CreateLinkToken(c *gin.Context) {
-	token, err := h.plaidSvc.CreateLinkToken(c.Request.Context(), c.GetString("user_id"))
+	token, err := h.plaidSvc.CreateLinkToken(c.Request.Context(), uid(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errResp("plaid_error", "failed to create link token"))
 		return
@@ -57,7 +57,7 @@ func (h *PlaidHandler) ExchangeToken(c *gin.Context) {
 		return
 	}
 
-	item, err := h.plaidSvc.ExchangeAndStore(c.Request.Context(), c.GetString("user_id"), req.PublicToken, req.InstitutionID, req.InstitutionName)
+	item, err := h.plaidSvc.ExchangeAndStore(c.Request.Context(), uid(c), req.PublicToken, req.InstitutionID, req.InstitutionName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errResp("plaid_error", "failed to exchange token"))
 		return
@@ -66,7 +66,7 @@ func (h *PlaidHandler) ExchangeToken(c *gin.Context) {
 }
 
 func (h *PlaidHandler) SyncTransactions(c *gin.Context) {
-	totalAdded, err := h.plaidSvc.SyncForUser(c.Request.Context(), c.GetString("user_id"))
+	totalAdded, err := h.plaidSvc.SyncForUser(c.Request.Context(), uid(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errResp("database_error", "failed to load items"))
 		return
@@ -75,7 +75,7 @@ func (h *PlaidHandler) SyncTransactions(c *gin.Context) {
 }
 
 func (h *PlaidHandler) ListItems(c *gin.Context) {
-	items, err := h.plaidRepo.GetItemsByUserID(c.GetString("user_id"))
+	items, err := h.plaidRepo.GetItemsByUserID(uid(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errResp("database_error", "failed to load items"))
 		return

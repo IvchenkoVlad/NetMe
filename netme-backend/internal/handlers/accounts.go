@@ -8,7 +8,6 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
-
 type AccountsHandler struct {
 	plaidRepo *repositories.PlaidRepository
 }
@@ -18,14 +17,8 @@ func NewAccountsHandler(repo *repositories.PlaidRepository) *AccountsHandler {
 }
 
 func RegisterAccountRoutes(r *gin.RouterGroup, repo *repositories.PlaidRepository) {
-	NewAccountsHandler(repo).RegisterRoutes(r)
-}
-
-func (h *AccountsHandler) RegisterRoutes(r *gin.RouterGroup) {
-	accounts := r.Group("/accounts")
-	{
-		accounts.GET("", h.ListAccounts)
-	}
+	h := NewAccountsHandler(repo)
+	r.Group("/accounts").GET("", h.ListAccounts)
 }
 
 func (h *AccountsHandler) ListAccounts(c *gin.Context) {

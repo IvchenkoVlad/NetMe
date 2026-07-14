@@ -83,17 +83,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const persistAuth = async (response: AuthResponse) => {
+    setUser(response.user);
+    setAccessToken(response.access_token);
+    await secureStorage.saveAccessToken(response.access_token);
+    await secureStorage.saveRefreshToken(response.refresh_token);
+    await secureStorage.saveUser(JSON.stringify(response.user));
+  };
+
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      const response = await authService.login(email, password);
-
-      setUser(response.user);
-      setAccessToken(response.access_token);
-
-      await secureStorage.saveAccessToken(response.access_token);
-      await secureStorage.saveRefreshToken(response.refresh_token);
-      await secureStorage.saveUser(JSON.stringify(response.user));
+      await persistAuth(await authService.login(email, password));
     } finally {
       setIsLoading(false);
     }
@@ -102,14 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      const response = await authService.register(email, password);
-
-      setUser(response.user);
-      setAccessToken(response.access_token);
-
-      await secureStorage.saveAccessToken(response.access_token);
-      await secureStorage.saveRefreshToken(response.refresh_token);
-      await secureStorage.saveUser(JSON.stringify(response.user));
+      await persistAuth(await authService.register(email, password));
     } finally {
       setIsLoading(false);
     }
@@ -118,12 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loginWithGoogle = async (googleAccessToken: string) => {
     try {
       setIsLoading(true);
-      const response = await authService.loginWithGoogle(googleAccessToken);
-      setUser(response.user);
-      setAccessToken(response.access_token);
-      await secureStorage.saveAccessToken(response.access_token);
-      await secureStorage.saveRefreshToken(response.refresh_token);
-      await secureStorage.saveUser(JSON.stringify(response.user));
+      await persistAuth(await authService.loginWithGoogle(googleAccessToken));
     } finally {
       setIsLoading(false);
     }

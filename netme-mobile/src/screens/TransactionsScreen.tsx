@@ -11,21 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
+import { Transaction } from '../services/transactionService';
 import { fmt, fmtDate, currentMonth, addMonths, monthLabel } from '../utils/format';
 import { GLASS } from '../styles/theme';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Transaction {
-  id: string;
-  name: string;
-  merchant_name?: string;
-  amount: number;
-  currency_code: string;
-  date: string;
-  pending: boolean;
-  category?: string;
-}
 
 const PAGE_SIZE = 50;
 
