@@ -12,27 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { transactionService, Transaction } from '../services/transactionService';
 import { budgetService, Category } from '../services/budgetService';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const GLASS = {
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-} as const;
-
-const fmt = (amount: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Math.abs(amount));
-
-const fmtDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
-  if (!y || !m || !d) return dateStr;
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  });
-};
+import { fmt, fmtDateLong } from '../utils/format';
+import { GLASS } from '../styles/theme';
 
 const normalize = (name: string) => name.toLowerCase().trim();
 
@@ -172,7 +153,7 @@ export const TransactionDetailScreen: React.FC<{ route: any; navigation: any }> 
           {txn.amount < 0 ? '+' : '-'}{fmt(txn.amount, txn.currency_code)}
         </Text>
         <Text style={styles.merchant}>{merchantDisplay}</Text>
-        <Text style={styles.meta}>{fmtDate(txn.date)}</Text>
+        <Text style={styles.meta}>{fmtDateLong(txn.date)}</Text>
         {txn.pending && <Text style={styles.badge}>PENDING</Text>}
       </View>
 

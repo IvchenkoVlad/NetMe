@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
+
 )
 
 type AnalyticsHandler struct {
@@ -31,13 +32,13 @@ func (h *AnalyticsHandler) Overview(c *gin.Context) {
 
 	nw, err := h.plaid.GetNetWorth(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 
 	history, err := h.budget.GetMonthlyHistory(userID, 6)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	if history == nil {
@@ -46,7 +47,7 @@ func (h *AnalyticsHandler) Overview(c *gin.Context) {
 
 	topCats, err := h.budget.GetTopCategories(userID, month, 5)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	if topCats == nil {

@@ -16,32 +16,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { budgetService, BudgetSummary, CategorySummary, MonthlyTotal } from '../services/budgetService';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-
-const monthLabel = (ym: string) => {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-};
-
-const shortMonth = (ym: string) => {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short' });
-};
-
-const addMonths = (ym: string, delta: number) => {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const currentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
+import { fmt, currentMonth, addMonths, monthLabel, shortMonth } from '../utils/format';
+import { GLASS } from '../styles/theme';
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
 
@@ -313,13 +289,6 @@ export const BudgetScreen: React.FC = () => {
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
-const GLASS = {
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-} as const;
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },

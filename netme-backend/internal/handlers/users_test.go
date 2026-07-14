@@ -69,7 +69,7 @@ func TestDeleteMeUserNotFound(t *testing.T) {
 
 	var resp models.ErrorResponse
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Error != "delete_error" {
-		t.Errorf("expected error 'delete_error', got %q", resp.Error)
+	if resp.Error != "db_error" {
+		t.Errorf("expected error 'db_error', got %q", resp.Error)
 	}
 }

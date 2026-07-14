@@ -8,6 +8,7 @@ import (
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
+
 type AccountsHandler struct {
 	plaidRepo *repositories.PlaidRepository
 }
@@ -28,15 +29,9 @@ func (h *AccountsHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 func (h *AccountsHandler) ListAccounts(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
-	accounts, err := h.plaidRepo.GetAccountsByUserID(uid)
+	accounts, err := h.plaidRepo.GetAccountsByUserID(uid(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "database_error",
-			Message: "failed to load accounts",
-		})
+		dbErr(c, "failed to load accounts")
 		return
 	}
 	if accounts == nil {

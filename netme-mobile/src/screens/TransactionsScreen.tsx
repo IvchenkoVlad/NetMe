@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
+import { fmt, fmtDate, currentMonth, addMonths, monthLabel } from '../utils/format';
+import { GLASS } from '../styles/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,40 +27,7 @@ interface Transaction {
   category?: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const PAGE_SIZE = 50;
-
-const currentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const addMonths = (ym: string, delta: number) => {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const monthLabel = (ym: string) => {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-};
-
-const fmt = (amount: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Math.abs(amount));
-
-const fmtDate = (dateStr: string) => {
-  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-const GLASS = {
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-} as const;
 
 // ─── Transaction Row ──────────────────────────────────────────────────────────
 

@@ -102,57 +102,43 @@ func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (i
 	if err != nil {
 		return 0, fmt.Errorf("load item: %w", err)
 	}
-
 	cursor := ""
 	if item.Cursor != nil {
 		cursor = *item.Cursor
 	}
-
-	totalAdded := 0
-	for {
-		result, err := s.syncPage(ctx, accessToken, cursor)
-		if err != nil {
-			s.plaidRepo.LogRawEvent(userID, "sync_error", map[string]any{
-				"error":   err.Error(),
-				"item_id": item.PlaidItemID,
-			})
-			return totalAdded, err
-		}
-
-		s.plaidRepo.LogRawEvent(userID, "webhook_sync_result", map[string]any{
-			"item_id":  item.PlaidItemID,
-			"added":    len(result.Added),
-			"modified": len(result.Modified),
-			"removed":  len(result.Removed),
-		})
-
-		for _, pt := range result.Added {
-			account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
-			if err != nil {
-				continue
-			}
-			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
-			totalAdded++
-		}
-		for _, pt := range result.Modified {
-			account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
-			if err != nil {
-				continue
-			}
-			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
-		}
-		for _, rt := range result.Removed {
-			_ = s.plaidRepo.RemoveTransaction(rt.GetTransactionId())
-		}
-
-		cursor = result.NextCursor
-		if !result.HasMore {
-			break
-		}
+	added, finalCursor, err := s.drainPages(ctx, userID, item.PlaidItemID, accessToken, cursor)
+	if err != nil {
+		return added, err
 	}
+	if finalCursor != "" {
+		_ = s.plaidRepo.UpdateCursor(itemUUID, finalCursor)
+	}
+	if s.rulesRepo != nil {
+		_ = s.rulesRepo.ApplyCategoryRules(userID)
+	}
+	return added, nil
+}
 
-	if cursor != "" {
-		_ = s.plaidRepo.UpdateCursor(itemUUID, cursor)
+// SyncForUser syncs all Plaid items for a user in sequence.
+func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, error) {
+	items, err := s.plaidRepo.GetAllItemsForSync(userID)
+	if err != nil {
+		return 0, fmt.Errorf("load items: %w", err)
+	}
+	totalAdded := 0
+	for _, entry := range items {
+		cursor := ""
+		if entry.Item.Cursor != nil {
+			cursor = *entry.Item.Cursor
+		}
+		added, finalCursor, err := s.drainPages(ctx, userID, entry.Item.PlaidItemID, entry.AccessToken, cursor)
+		totalAdded += added
+		if err != nil {
+			continue // already logged inside drainPages
+		}
+		if finalCursor != "" {
+			_ = s.plaidRepo.UpdateCursor(entry.Item.ID, finalCursor)
+		}
 	}
 	if s.rulesRepo != nil {
 		_ = s.rulesRepo.ApplyCategoryRules(userID)
@@ -160,72 +146,49 @@ func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (i
 	return totalAdded, nil
 }
 
-func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, error) {
-	items, err := s.plaidRepo.GetAllItemsForSync(userID)
-	if err != nil {
-		return 0, fmt.Errorf("load items: %w", err)
-	}
-
-	totalAdded := 0
-	for _, entry := range items {
-		cursor := ""
-		if entry.Item.Cursor != nil {
-			cursor = *entry.Item.Cursor
-		}
-
-		for {
-			result, err := s.syncPage(ctx, entry.AccessToken, cursor)
-			if err != nil {
-				s.plaidRepo.LogRawEvent(userID, "sync_error", map[string]any{
-					"error":   err.Error(),
-					"item_id": entry.Item.PlaidItemID,
-				})
-				break
-			}
-
-			s.plaidRepo.LogRawEvent(userID, "sync_result", map[string]any{
-				"item_id":     entry.Item.PlaidItemID,
-				"added":       result.Added,
-				"modified":    result.Modified,
-				"removed":     result.Removed,
-				"next_cursor": result.NextCursor,
-				"has_more":    result.HasMore,
+// drainPages runs the cursor-paginated sync loop for one Plaid item until HasMore is false.
+// Returns (transactions added, final cursor, first error encountered).
+func (s *PlaidService) drainPages(ctx context.Context, userID, plaidItemID, accessToken, cursor string) (int, string, error) {
+	added := 0
+	for {
+		result, err := s.syncPage(ctx, accessToken, cursor)
+		if err != nil {
+			s.plaidRepo.LogRawEvent(userID, "sync_error", map[string]any{
+				"item_id": plaidItemID,
+				"error":   err.Error(),
 			})
-
-			for _, pt := range result.Added {
-				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
-				if err != nil {
-					continue
-				}
-				_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
-				totalAdded++
-			}
-			for _, pt := range result.Modified {
-				account, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
-				if err != nil {
-					continue
-				}
-				_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, account.ID, pt))
-			}
-			for _, rt := range result.Removed {
-				_ = s.plaidRepo.RemoveTransaction(rt.GetTransactionId())
-			}
-
-			cursor = result.NextCursor
-			if !result.HasMore {
-				break
-			}
+			return added, cursor, err
 		}
-
-		if cursor != "" {
-			_ = s.plaidRepo.UpdateCursor(entry.Item.ID, cursor)
+		s.plaidRepo.LogRawEvent(userID, "sync_result", map[string]any{
+			"item_id":  plaidItemID,
+			"added":    len(result.Added),
+			"modified": len(result.Modified),
+			"removed":  len(result.Removed),
+		})
+		for _, pt := range result.Added {
+			acct, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			if err != nil {
+				continue
+			}
+			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
+			added++
+		}
+		for _, pt := range result.Modified {
+			acct, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			if err != nil {
+				continue
+			}
+			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
+		}
+		for _, rt := range result.Removed {
+			_ = s.plaidRepo.RemoveTransaction(rt.GetTransactionId())
+		}
+		cursor = result.NextCursor
+		if !result.HasMore {
+			break
 		}
 	}
-
-	if s.rulesRepo != nil {
-		_ = s.rulesRepo.ApplyCategoryRules(userID)
-	}
-	return totalAdded, nil
+	return added, cursor, nil
 }
 
 // RevokeAllItems calls Plaid's /item/remove for every item owned by the user.

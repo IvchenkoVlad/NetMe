@@ -42,35 +42,26 @@ func (h *RulesHandler) CreateRule(c *gin.Context) {
 		ApplyToPast        bool   `json:"apply_to_past"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
-		return
-	}
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
 
-	rule, err := h.repo.Upsert(uid, req.NormalizedMerchant, req.CategoryID)
+	userID := uid(c)
+	rule, err := h.repo.Upsert(userID, req.NormalizedMerchant, req.CategoryID)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "category not found"})
+		c.JSON(http.StatusNotFound, errResp("not_found", "category not found"))
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to save rule"})
+		dbErr(c, "failed to save rule")
 		return
 	}
 
 	var updatedCount int64
 	if req.ApplyToPast {
-		updatedCount, err = h.repo.ApplyToPast(uid, req.NormalizedMerchant, req.CategoryID)
+		updatedCount, err = h.repo.ApplyToPast(userID, req.NormalizedMerchant, req.CategoryID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to apply rule to past"})
+			dbErr(c, "failed to apply rule to past")
 			return
 		}
 	}
@@ -79,19 +70,9 @@ func (h *RulesHandler) CreateRule(c *gin.Context) {
 }
 
 func (h *RulesHandler) ListRules(c *gin.Context) {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
-		return
-	}
-	rules, err := h.repo.List(uid)
+	rules, err := h.repo.List(uid(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to load rules"})
+		dbErr(c, "failed to load rules")
 		return
 	}
 	if rules == nil {
@@ -101,23 +82,13 @@ func (h *RulesHandler) ListRules(c *gin.Context) {
 }
 
 func (h *RulesHandler) DeleteRule(c *gin.Context) {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
-		return
-	}
-	err := h.repo.Delete(uid, c.Param("id"))
+	err := h.repo.Delete(uid(c), c.Param("id"))
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "rule not found"})
+		c.JSON(http.StatusNotFound, errResp("not_found", "rule not found"))
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to delete rule"})
+		dbErr(c, "failed to delete rule")
 		return
 	}
 	c.Status(http.StatusNoContent)

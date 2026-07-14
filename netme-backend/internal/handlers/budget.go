@@ -2,33 +2,12 @@ package handlers
 
 import (
 	"net/http"
-	"regexp"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
-
-var reMonth = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
-
-// parseMonth returns the query param month if valid (YYYY-MM), the current month
-// if empty, or an error string if the format is wrong.
-func parseMonth(c *gin.Context) (string, bool) {
-	m := c.Query("month")
-	if m == "" {
-		return currentMonth(), true
-	}
-	if !reMonth.MatchString(m) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_month",
-			Message: "month must be in YYYY-MM format (e.g. 2026-07)",
-		})
-		return "", false
-	}
-	return m, true
-}
 
 type BudgetHandler struct {
 	repo *repositories.BudgetRepository
@@ -54,15 +33,6 @@ func RegisterBudgetRoutes(r *gin.RouterGroup, repo *repositories.BudgetRepositor
 	r.PUT("/budget/:category_id", h.SetBudget)
 }
 
-func uid(c *gin.Context) string {
-	v, _ := c.Get("user_id")
-	return v.(string)
-}
-
-func currentMonth() string {
-	return time.Now().Format("2006-01")
-}
-
 // GET /v1/budget/summary?month=2026-06
 func (h *BudgetHandler) GetSummary(c *gin.Context) {
 	month, ok := parseMonth(c)
@@ -71,7 +41,7 @@ func (h *BudgetHandler) GetSummary(c *gin.Context) {
 	}
 	summary, err := h.repo.BuildSummary(uid(c), month)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, summary)
@@ -87,7 +57,7 @@ func (h *BudgetHandler) GetHistory(c *gin.Context) {
 	}
 	history, err := h.repo.GetMonthlyHistory(uid(c), months)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	if history == nil {
@@ -100,12 +70,12 @@ func (h *BudgetHandler) GetHistory(c *gin.Context) {
 func (h *BudgetHandler) ListCategories(c *gin.Context) {
 	userID := uid(c)
 	if err := h.repo.EnsureCategories(userID); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	cats, err := h.repo.GetCategories(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	if cats == nil {
@@ -124,7 +94,7 @@ func (h *BudgetHandler) CreateCategory(c *gin.Context) {
 		Plaid    []string `json:"plaid_primary_categories"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
 	if req.Icon == "" {
@@ -138,7 +108,7 @@ func (h *BudgetHandler) CreateCategory(c *gin.Context) {
 	}
 	cat, err := h.repo.CreateCategory(uid(c), req.Name, req.Icon, req.Color, req.IsIncome, req.Plaid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusCreated, cat)
@@ -153,7 +123,7 @@ func (h *BudgetHandler) UpdateCategory(c *gin.Context) {
 		Plaid []string `json:"plaid_primary_categories"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
 	if req.Plaid == nil {
@@ -161,7 +131,7 @@ func (h *BudgetHandler) UpdateCategory(c *gin.Context) {
 	}
 	cat, err := h.repo.UpdateCategory(c.Param("id"), uid(c), req.Name, req.Icon, req.Color, req.Plaid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, cat)
@@ -170,7 +140,7 @@ func (h *BudgetHandler) UpdateCategory(c *gin.Context) {
 // DELETE /v1/categories/:id
 func (h *BudgetHandler) DeleteCategory(c *gin.Context) {
 	if err := h.repo.DeleteCategory(c.Param("id"), uid(c)); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -186,12 +156,12 @@ func (h *BudgetHandler) SetBudget(c *gin.Context) {
 		Amount float64 `json:"amount" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", err.Error()))
 		return
 	}
 	b, err := h.repo.SetBudget(uid(c), c.Param("category_id"), month, req.Amount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "db_error", Message: err.Error()})
+		dbErr(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, b)

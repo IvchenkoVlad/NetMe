@@ -18,6 +18,8 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { PlaidLinkModal } from './PlaidLinkScreen';
 import { PlaidConsentModal } from './PlaidConsentModal';
+import { fmt, fmtDateLong } from '../utils/format';
+import { GLASS } from '../styles/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,25 +63,6 @@ type ViewMode = 'byBank' | 'overview';
 
 const BANK_COLORS = ['#2dd4a7', '#60a5fa', '#f97316', '#a78bfa', '#f43f5e', '#facc15'];
 const TRIAL_BANK_LIMIT = 1;
-
-const GLASS = {
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-} as const;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const fmt = (amount: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Math.abs(amount));
-
-const fmtDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
-  if (!y || !m || !d) return dateStr;
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-};
 
 const isDebt = (type: string) => type === 'credit' || type === 'loan';
 const isBalance = (type: string) => type === 'depository';
@@ -180,7 +163,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
                 <View style={t.left}>
                   <Text style={t.name} numberOfLines={1}>{item.merchant_name || item.name}</Text>
                   <Text style={t.meta}>
-                    {fmtDate(item.date)}{item.category ? ` · ${item.category.replace(/_/g, ' ').toLowerCase()}` : ''}
+                    {fmtDateLong(item.date)}{item.category ? ` · ${item.category.replace(/_/g, ' ').toLowerCase()}` : ''}
                     {item.pending ? ' · pending' : ''}
                   </Text>
                 </View>

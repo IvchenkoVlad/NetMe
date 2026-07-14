@@ -4,14 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
 )
-
-var reTxnMonth = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
 
 // TxnRepo is the subset of PlaidRepository used by transaction handlers.
 type TxnRepo interface {
@@ -39,28 +36,13 @@ func RegisterTransactionRoutes(r *gin.RouterGroup, repo TxnRepo) {
 }
 
 func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
+	month, ok := parseMonth(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
 		return
 	}
 
-	limit := 50
-	offset := 0
+	limit, offset := 50, 0
 	accountID := c.Query("account_id")
-	month := c.Query("month")
-	if month != "" && !reTxnMonth.MatchString(month) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_month",
-			Message: "month must be in YYYY-MM format (e.g. 2026-07)",
-		})
-		return
-	}
 	if l := c.Query("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 200 {
 			limit = v
@@ -72,12 +54,9 @@ func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
 		}
 	}
 
-	txns, err := h.repo.GetTransactionsByUserID(uid, accountID, month, limit, offset)
+	txns, err := h.repo.GetTransactionsByUserID(uid(c), accountID, month, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "database_error",
-			Message: "failed to load transactions",
-		})
+		dbErr(c, "failed to load transactions")
 		return
 	}
 	if txns == nil {
@@ -87,23 +66,13 @@ func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
 }
 
 func (h *TransactionsHandler) GetTransaction(c *gin.Context) {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
-		return
-	}
-	txn, err := h.repo.GetTransactionByID(uid, c.Param("id"))
+	txn, err := h.repo.GetTransactionByID(uid(c), c.Param("id"))
 	if errors.Is(err, sql.ErrNoRows) || txn == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "transaction not found"})
+		c.JSON(http.StatusNotFound, errResp("not_found", "transaction not found"))
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to load transaction"})
+		dbErr(c, "failed to load transaction")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"transaction": txn})
@@ -114,26 +83,16 @@ func (h *TransactionsHandler) PatchTransaction(c *gin.Context) {
 		CategoryID string `json:"category_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: "category_id is required"})
+		c.JSON(http.StatusBadRequest, errResp("invalid_request", "category_id is required"))
 		return
 	}
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
-		return
-	}
-	uid, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
-		return
-	}
-	txn, err := h.repo.PatchTransactionCategory(uid, c.Param("id"), req.CategoryID)
+	txn, err := h.repo.PatchTransactionCategory(uid(c), c.Param("id"), req.CategoryID)
 	if errors.Is(err, sql.ErrNoRows) || txn == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "transaction not found"})
+		c.JSON(http.StatusNotFound, errResp("not_found", "transaction not found"))
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to update transaction"})
+		dbErr(c, "failed to update transaction")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"transaction": txn})

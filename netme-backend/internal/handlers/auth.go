@@ -95,10 +95,6 @@ func (h *AuthHandler) GoogleAuth(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func errResp(code, msg string) models.ErrorResponse {
-	return models.ErrorResponse{Error: code, Message: msg}
-}
-
 func authErrStatus(err error) int {
 	switch {
 	case errors.Is(err, services.ErrUserExists):

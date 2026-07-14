@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"sort"
 
 	"github.com/lib/pq"
 	"github.com/vladyslavivchenko/netme/internal/models"
@@ -187,47 +188,34 @@ func (r *BudgetRepository) GetTopCategories(userID, month string, limit int) ([]
 		return nil, err
 	}
 
+	// Collect non-income categories with spending, sort descending, take top N.
+	spending := make([]models.CategorySummary, 0, len(summary.Categories))
 	var totalSpending float64
 	for _, c := range summary.Categories {
 		if !c.IsIncome && c.Spent > 0 {
+			spending = append(spending, c)
 			totalSpending += c.Spent
 		}
 	}
+	sort.Slice(spending, func(i, j int) bool { return spending[i].Spent > spending[j].Spent })
 
-	// Sort by spent descending; take top N
-	top := make([]models.TopCategory, 0, limit)
-	// Simple selection: iterate sorted slice (categories already ordered by sort_order, re-sort by spent)
-	type catSpent struct {
-		cat   models.CategorySummary
+	if limit > len(spending) {
+		limit = len(spending)
 	}
-	candidates := make([]catSpent, 0, len(summary.Categories))
-	for _, c := range summary.Categories {
-		if !c.IsIncome && c.Spent > 0 {
-			candidates = append(candidates, catSpent{c})
-		}
-	}
-	// Insertion sort (small N)
-	for i := 1; i < len(candidates); i++ {
-		for j := i; j > 0 && candidates[j].cat.Spent > candidates[j-1].cat.Spent; j-- {
-			candidates[j], candidates[j-1] = candidates[j-1], candidates[j]
-		}
-	}
-	for i, c := range candidates {
-		if i >= limit {
-			break
-		}
+	top := make([]models.TopCategory, limit)
+	for i, c := range spending[:limit] {
 		pct := 0.0
 		if totalSpending > 0 {
-			pct = c.cat.Spent / totalSpending * 100
+			pct = c.Spent / totalSpending * 100
 		}
-		top = append(top, models.TopCategory{
-			CategoryID: c.cat.ID,
-			Name:       c.cat.Name,
-			Icon:       c.cat.Icon,
-			Color:      c.cat.Color,
-			Spent:      c.cat.Spent,
+		top[i] = models.TopCategory{
+			CategoryID: c.ID,
+			Name:       c.Name,
+			Icon:       c.Icon,
+			Color:      c.Color,
+			Spent:      c.Spent,
 			Pct:        pct,
-		})
+		}
 	}
 	return top, nil
 }

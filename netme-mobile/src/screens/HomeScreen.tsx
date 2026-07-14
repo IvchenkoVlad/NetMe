@@ -13,6 +13,8 @@ import { useNavigation } from '@react-navigation/native';
 import { budgetService, BudgetSummary } from '../services/budgetService';
 import { plaidService } from '../services/plaidService';
 import { analyticsService, AnalyticsOverview } from '../services/analyticsService';
+import { fmt, fmtDate, currentMonth } from '../utils/format';
+import { GLASS } from '../styles/theme';
 
 interface Transaction {
   id: string;
@@ -23,21 +25,6 @@ interface Transaction {
   date: string;
   pending: boolean;
 }
-
-const currentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-
-const GLASS = {
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-} as const;
 
 export const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -185,7 +172,7 @@ export const HomeScreen: React.FC = () => {
                 >
                   <View style={s.txnLeft}>
                     <Text style={s.txnName} numberOfLines={1}>{txn.merchant_name || txn.name}</Text>
-                    <Text style={s.txnDate}>{txn.date}</Text>
+                    <Text style={s.txnDate}>{fmtDate(txn.date)}</Text>
                   </View>
                   <Text style={[s.txnAmount, txn.amount < 0 && s.incomeColor]}>
                     {txn.amount < 0 ? '+' : ''}{fmt(Math.abs(txn.amount))}
@@ -202,6 +189,7 @@ export const HomeScreen: React.FC = () => {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
+
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
   content: { padding: 16, gap: 14, paddingBottom: 40 },
