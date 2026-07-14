@@ -41,6 +41,7 @@ func New() (*App, error) {
 	tokenRepo := repositories.NewTokenRepository(database)
 	plaidRepo := repositories.NewPlaidRepository(database)
 	budgetRepo := repositories.NewBudgetRepository(database)
+	rulesRepo := repositories.NewRulesRepository(database)
 
 	jwtSvc := services.NewJWTService(jwtSecret)
 
@@ -83,6 +84,7 @@ func New() (*App, error) {
 		handlers.RegisterTransactionRoutes(protected, plaidRepo)
 		handlers.RegisterPlaidRoutes(protected, v1, plaidSvc, plaidRepo)
 		handlers.RegisterBudgetRoutes(protected, budgetRepo)
+		handlers.RegisterRulesRoutes(protected, rulesRepo)
 	}
 
 	return &App{
