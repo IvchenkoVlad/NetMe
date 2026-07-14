@@ -107,7 +107,7 @@ func (r *BudgetRepository) GetTransactionsForMonth(userID, month string) ([]*mod
 	rows, err := r.db.Query(
 		`SELECT id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
 		        to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
-		        category, category_detailed, payment_channel, pending, created_at, updated_at
+		        category, category_detailed, payment_channel, pending, category_id, created_at, updated_at
 		 FROM transactions
 		 WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2 AND pending = false
 		 ORDER BY date DESC`, userID, month)
@@ -122,7 +122,7 @@ func (r *BudgetRepository) GetTransactionsForMonth(userID, month string) ([]*mod
 		if err := rows.Scan(&t.ID, &t.UserID, &t.AccountID, &t.PlaidTransactionID, &t.Amount, &t.CurrencyCode,
 			&t.Name, &t.MerchantName, &t.Date, &t.AuthorizedDate,
 			&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending,
-			&t.CreatedAt, &t.UpdatedAt); err != nil {
+			&t.CategoryID, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		txns = append(txns, t)
@@ -203,10 +203,12 @@ func (r *BudgetRepository) BuildSummary(userID, month string) (*models.BudgetSum
 		return nil, err
 	}
 
-	// Build plaid→category lookup
+	// Build lookup maps
+	catByID := make(map[string]*models.Category, len(cats))
 	plaidToCat := make(map[string]*models.Category)
 	var catchAll *models.Category
 	for _, c := range cats {
+		catByID[c.ID] = c
 		if len(c.PlaidPrimaryCategories) == 0 {
 			catchAll = c
 			continue
@@ -221,7 +223,11 @@ func (r *BudgetRepository) BuildSummary(userID, month string) (*models.BudgetSum
 
 	for _, t := range txns {
 		var cat *models.Category
-		if t.Category != nil {
+		// Prefer explicit user override; fall back to Plaid mapping
+		if t.CategoryID != nil {
+			cat = catByID[*t.CategoryID]
+		}
+		if cat == nil && t.Category != nil {
 			cat = plaidToCat[*t.Category]
 		}
 		if cat == nil {
