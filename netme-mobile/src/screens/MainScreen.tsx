@@ -14,12 +14,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { HomeScreen } from './HomeScreen';
 import { AccountsScreen } from './AccountsScreen';
 import { BudgetScreen } from './BudgetScreen';
 
 const { width: W } = Dimensions.get('window');
 
 const TABS = [
+  { label: 'Home', screen: <HomeScreen /> },
   { label: 'Accounts', screen: <AccountsScreen /> },
   { label: 'Budget', screen: <BudgetScreen /> },
 ];
