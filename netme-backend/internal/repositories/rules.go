@@ -16,8 +16,13 @@ func NewRulesRepository(db *sql.DB) *RulesRepository {
 }
 
 func (r *RulesRepository) Upsert(userID, normalizedMerchant, categoryID string) (*models.CategoryRule, error) {
+	cat, err := r.getCategoryByID(categoryID, userID)
+	if err != nil {
+		return nil, err // category not found or not owned by user
+	}
+
 	rule := &models.CategoryRule{}
-	err := r.db.QueryRow(
+	err = r.db.QueryRow(
 		`INSERT INTO category_rules (user_id, normalized_merchant, category_id)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (user_id, normalized_merchant)
@@ -28,10 +33,7 @@ func (r *RulesRepository) Upsert(userID, normalizedMerchant, categoryID string) 
 	if err != nil {
 		return nil, err
 	}
-	cat, err := r.getCategoryByID(categoryID, userID)
-	if err == nil {
-		rule.Category = cat
-	}
+	rule.Category = cat
 	return rule, nil
 }
 

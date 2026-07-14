@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,10 +45,22 @@ func (h *RulesHandler) CreateRule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: err.Error()})
 		return
 	}
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
 
 	rule, err := h.repo.Upsert(uid, req.NormalizedMerchant, req.CategoryID)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "category not found"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to save rule"})
 		return
@@ -66,8 +79,17 @@ func (h *RulesHandler) CreateRule(c *gin.Context) {
 }
 
 func (h *RulesHandler) ListRules(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	rules, err := h.repo.List(userID.(string))
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
+	rules, err := h.repo.List(uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "database_error", Message: "failed to load rules"})
 		return
@@ -79,9 +101,18 @@ func (h *RulesHandler) ListRules(c *gin.Context) {
 }
 
 func (h *RulesHandler) DeleteRule(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	err := h.repo.Delete(userID.(string), c.Param("id"))
-	if err == sql.ErrNoRows {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
+	err := h.repo.Delete(uid, c.Param("id"))
+	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "rule not found"})
 		return
 	}

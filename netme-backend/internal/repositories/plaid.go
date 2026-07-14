@@ -236,6 +236,7 @@ func (r *PlaidRepository) PatchTransactionCategory(userID, txnID, categoryID str
 	err := r.db.QueryRow(
 		`UPDATE transactions SET category_id = $1, updated_at = now()
 		 WHERE id = $2 AND user_id = $3
+		   AND EXISTS (SELECT 1 FROM categories WHERE id = $1 AND user_id = $3)
 		 RETURNING id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
 		           to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
 		           category, category_detailed, payment_channel, pending, category_id, created_at, updated_at`,

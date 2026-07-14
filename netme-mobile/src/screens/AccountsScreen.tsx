@@ -14,7 +14,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { PlaidLinkModal } from './PlaidLinkScreen';
 
@@ -107,7 +107,7 @@ function groupByBank(accounts: Account[]): BankGroup[] {
 
 // ─── Transaction Modal ────────────────────────────────────────────────────────
 
-const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () => void }> = ({ account, onClose }) => {
+const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () => void; focusVersion: number }> = ({ account, onClose, focusVersion }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
@@ -128,7 +128,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
     translateY.setValue(0);
     setLoading(true);
     plaidService.getTransactions(100, 0, account.id).then(setTransactions).catch(() => {}).finally(() => setLoading(false));
-  }, [account]);
+  }, [account, focusVersion]);
 
   if (!account) return null;
 
@@ -415,6 +415,7 @@ const FAB = ({
 
 export const AccountsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -422,12 +423,15 @@ export const AccountsScreen: React.FC = () => {
   const [showPlaid, setShowPlaid] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('byBank');
+  const [focusVersion, setFocusVersion] = useState(0);
 
   const loadAccounts = useCallback(async () => {
     try { setAccounts(await plaidService.getAccounts()); } catch (e: any) { console.error(e); }
   }, []);
 
   useEffect(() => { loadAccounts().finally(() => setLoading(false)); }, [loadAccounts]);
+
+  useEffect(() => { if (isFocused) setFocusVersion(v => v + 1); }, [isFocused]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -530,7 +534,7 @@ export const AccountsScreen: React.FC = () => {
       />
 
       <PlaidLinkModal visible={showPlaid} onSuccess={handlePlaidSuccess} onClose={() => setShowPlaid(false)} />
-      {selectedAccount && <AccountTransactionsModal account={selectedAccount} onClose={() => setSelectedAccount(null)} />}
+      {selectedAccount && <AccountTransactionsModal account={selectedAccount} onClose={() => setSelectedAccount(null)} focusVersion={focusVersion} />}
     </View>
   );
 };

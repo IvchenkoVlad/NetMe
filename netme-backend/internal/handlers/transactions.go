@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -35,8 +36,16 @@ func RegisterTransactionRoutes(r *gin.RouterGroup, repo TxnRepo) {
 }
 
 func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
 
 	limit := 50
 	offset := 0
@@ -67,9 +76,18 @@ func (h *TransactionsHandler) ListTransactions(c *gin.Context) {
 }
 
 func (h *TransactionsHandler) GetTransaction(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	txn, err := h.repo.GetTransactionByID(userID.(string), c.Param("id"))
-	if err == sql.ErrNoRows || txn == nil {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
+	txn, err := h.repo.GetTransactionByID(uid, c.Param("id"))
+	if errors.Is(err, sql.ErrNoRows) || txn == nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "transaction not found"})
 		return
 	}
@@ -88,9 +106,18 @@ func (h *TransactionsHandler) PatchTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid_request", Message: "category_id is required"})
 		return
 	}
-	userID, _ := c.Get("user_id")
-	txn, err := h.repo.PatchTransactionCategory(userID.(string), c.Param("id"), req.CategoryID)
-	if err == sql.ErrNoRows || txn == nil {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "missing user id"})
+		return
+	}
+	uid, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized", Message: "invalid user id"})
+		return
+	}
+	txn, err := h.repo.PatchTransactionCategory(uid, c.Param("id"), req.CategoryID)
+	if errors.Is(err, sql.ErrNoRows) || txn == nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "not_found", Message: "transaction not found"})
 		return
 	}
