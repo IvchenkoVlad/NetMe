@@ -197,7 +197,8 @@ func newTestAuthRouterWithVerifier(verifier services.GoogleVerifier) (*gin.Engin
 	userRepo := newMockUserRepo()
 	tokenRepo := newMockTokenRepo()
 	jwtSvc := services.NewJWTService(testAuthSecret)
-	h := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, verifier)
+	authSvc := services.NewAuthService(userRepo, tokenRepo, jwtSvc, verifier)
+	h := handlers.NewAuthHandler(authSvc)
 
 	r := gin.New()
 	r.POST("/v1/auth/register", h.Register)
@@ -477,7 +478,8 @@ func TestRegisterConcurrentDuplicate(t *testing.T) {
 	userRepo := &concurrentMockUserRepo{}
 	tokenRepo := newMockTokenRepo()
 	jwtSvc := services.NewJWTService(testAuthSecret)
-	h := handlers.NewAuthHandler(userRepo, tokenRepo, jwtSvc, &mockGoogleVerifier{})
+	authSvc := services.NewAuthService(userRepo, tokenRepo, jwtSvc, &mockGoogleVerifier{})
+	h := handlers.NewAuthHandler(authSvc)
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
