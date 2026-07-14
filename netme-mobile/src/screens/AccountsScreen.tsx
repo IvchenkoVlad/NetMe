@@ -14,6 +14,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { PlaidLinkModal } from './PlaidLinkScreen';
 
@@ -110,6 +111,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
+  const navigation = useNavigation<any>();
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -166,7 +168,14 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
             data={transactions}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
-              <View style={t.row}>
+              <TouchableOpacity
+                style={t.row}
+                activeOpacity={0.7}
+                onPress={() => {
+                  onClose();
+                  navigation.navigate('TransactionDetail', { transactionId: item.id });
+                }}
+              >
                 <View style={t.left}>
                   <Text style={t.name} numberOfLines={1}>{item.merchant_name || item.name}</Text>
                   <Text style={t.meta}>
@@ -177,7 +186,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
                 <Text style={[t.amount, item.amount < 0 && t.positive]}>
                   {item.amount < 0 ? '+' : '-'}{fmt(item.amount, item.currency_code)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
             ItemSeparatorComponent={() => <View style={t.sep} />}
             contentContainerStyle={{ paddingBottom: 40 }}

@@ -9,6 +9,7 @@ import { RegisterScreen } from '../screens/RegisterScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { MainScreen } from '../screens/MainScreen';
+import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +32,11 @@ const AppStack = () => (
       name="Settings"
       component={SettingsScreen}
       options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+    />
+    <Stack.Screen
+      name="TransactionDetail"
+      component={TransactionDetailScreen}
+      options={{ presentation: 'card', animation: 'slide_from_right' }}
     />
   </Stack.Navigator>
 );
