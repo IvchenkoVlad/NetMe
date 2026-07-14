@@ -174,7 +174,7 @@ func (r *PlaidRepository) GetTransactionsByUserID(userID, accountID string, limi
 	rows, err := r.db.Query(
 		`SELECT id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
 		        to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
-		        category, category_detailed, payment_channel, pending, created_at, updated_at
+		        category, category_detailed, payment_channel, pending, category_id, created_at, updated_at
 		 FROM transactions
 		 WHERE user_id = $1 AND ($2 = '' OR account_id::text = $2)
 		 ORDER BY date DESC, created_at DESC
@@ -189,7 +189,7 @@ func (r *PlaidRepository) GetTransactionsByUserID(userID, accountID string, limi
 		t := &models.Transaction{}
 		if err := rows.Scan(&t.ID, &t.UserID, &t.AccountID, &t.PlaidTransactionID, &t.Amount, &t.CurrencyCode,
 			&t.Name, &t.MerchantName, &t.Date, &t.AuthorizedDate,
-			&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending,
+			&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending, &t.CategoryID,
 			&t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -212,4 +212,40 @@ func (r *PlaidRepository) LogRawEvent(userID, eventType string, payload any) {
 		`INSERT INTO plaid_raw_events (user_id, event_type, payload) VALUES ($1, $2, $3)`,
 		uid, eventType, string(b),
 	)
+}
+
+func (r *PlaidRepository) GetTransactionByID(userID, id string) (*models.Transaction, error) {
+	t := &models.Transaction{}
+	err := r.db.QueryRow(
+		`SELECT id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
+		        to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
+		        category, category_detailed, payment_channel, pending, category_id, created_at, updated_at
+		 FROM transactions WHERE id = $1 AND user_id = $2`, id, userID,
+	).Scan(&t.ID, &t.UserID, &t.AccountID, &t.PlaidTransactionID, &t.Amount, &t.CurrencyCode,
+		&t.Name, &t.MerchantName, &t.Date, &t.AuthorizedDate,
+		&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending, &t.CategoryID,
+		&t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (r *PlaidRepository) PatchTransactionCategory(userID, txnID, categoryID string) (*models.Transaction, error) {
+	t := &models.Transaction{}
+	err := r.db.QueryRow(
+		`UPDATE transactions SET category_id = $1, updated_at = now()
+		 WHERE id = $2 AND user_id = $3
+		 RETURNING id, user_id, account_id, plaid_transaction_id, amount, currency_code, name, merchant_name,
+		           to_char(date, 'YYYY-MM-DD'), to_char(authorized_date, 'YYYY-MM-DD'),
+		           category, category_detailed, payment_channel, pending, category_id, created_at, updated_at`,
+		categoryID, txnID, userID,
+	).Scan(&t.ID, &t.UserID, &t.AccountID, &t.PlaidTransactionID, &t.Amount, &t.CurrencyCode,
+		&t.Name, &t.MerchantName, &t.Date, &t.AuthorizedDate,
+		&t.Category, &t.CategoryDetailed, &t.PaymentChannel, &t.Pending, &t.CategoryID,
+		&t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }

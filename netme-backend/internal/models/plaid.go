@@ -46,6 +46,7 @@ type Transaction struct {
 	CategoryDetailed   *string   `json:"category_detailed,omitempty"`
 	PaymentChannel     *string   `json:"payment_channel,omitempty"`
 	Pending            bool      `json:"pending"`
+	CategoryID         *string   `json:"category_id,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
