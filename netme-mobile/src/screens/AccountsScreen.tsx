@@ -102,7 +102,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
     if (!account) return;
     translateY.setValue(0);
     setLoading(true);
-    plaidService.getTransactions(100, 0, account.id).then(setTransactions).catch(() => {}).finally(() => setLoading(false));
+    plaidService.getTransactions({ limit: 100, accountId: account.id }).then(setTransactions).catch(() => {}).finally(() => setLoading(false));
   }, [account, focusVersion]);
 
   if (!account) return null;

@@ -25,7 +25,8 @@ export const plaidService = {
     return data.accounts || [];
   },
 
-  getTransactions: async (limit = 50, offset = 0, accountId = '', month = '') => {
+  getTransactions: async (opts: { limit?: number; offset?: number; accountId?: string; month?: string } = {}) => {
+    const { limit = 50, offset = 0, accountId = '', month = '' } = opts;
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (accountId) params.set('account_id', accountId);
     if (month) params.set('month', month);

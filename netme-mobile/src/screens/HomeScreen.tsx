@@ -31,7 +31,7 @@ export const HomeScreen: React.FC = () => {
       const [s, a, txns] = await Promise.all([
         budgetService.getSummary(currentMonth()),
         analyticsService.getOverview(),
-        plaidService.getTransactions(5),
+        plaidService.getTransactions({ limit: 5 }),
       ]);
       setSummary(s);
       setAnalytics(a);

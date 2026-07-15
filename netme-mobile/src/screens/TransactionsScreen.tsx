@@ -78,7 +78,7 @@ export const TransactionsScreen: React.FC = () => {
   const offsetRef = useRef(0);
 
   const fetchPage = useCallback(async (m: string, offset: number, replace: boolean) => {
-    const page = await plaidService.getTransactions(PAGE_SIZE, offset, '', m);
+    const page = await plaidService.getTransactions({ limit: PAGE_SIZE, offset, month: m });
     if (replace) {
       setTxns(page);
     } else {
