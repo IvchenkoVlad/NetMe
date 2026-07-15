@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { secureStorage } from '../services/secureStorage';
-import { authService } from '../services/authService';
+import { authService, AuthResponse } from '../services/authService';
 
 export interface User {
   id: string;

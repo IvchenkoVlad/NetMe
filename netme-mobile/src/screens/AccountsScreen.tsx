@@ -18,6 +18,7 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { PlaidLinkModal } from './PlaidLinkScreen';
 import { PlaidConsentModal } from './PlaidConsentModal';
+import { Transaction } from '../services/transactionService';
 import { fmt, fmtDateLong } from '../utils/format';
 import { GLASS } from '../styles/theme';
 
@@ -37,16 +38,6 @@ interface Account {
   plaid_item_id: string;
 }
 
-interface Transaction {
-  id: string;
-  name: string;
-  merchant_name?: string;
-  amount: number;
-  currency_code: string;
-  date: string;
-  category?: string;
-  pending: boolean;
-}
 
 interface BankGroup {
   institution_name: string;
