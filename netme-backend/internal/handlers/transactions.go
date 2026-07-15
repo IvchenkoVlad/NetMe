@@ -8,24 +8,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
-// TxnRepo is the subset of PlaidRepository used by transaction handlers.
-type TxnRepo interface {
-	GetTransactionsByUserID(userID, accountID, month string, limit, offset int) ([]*models.Transaction, error)
-	GetTransactionByID(userID, id string) (*models.Transaction, error)
-	PatchTransactionCategory(userID, txnID, categoryID string) (*models.Transaction, error)
-}
-
 type TransactionsHandler struct {
-	repo TxnRepo
+	repo repositories.TxnRepo
 }
 
-func NewTransactionsHandler(repo TxnRepo) *TransactionsHandler {
+func NewTransactionsHandler(repo repositories.TxnRepo) *TransactionsHandler {
 	return &TransactionsHandler{repo: repo}
 }
 
-func RegisterTransactionRoutes(r *gin.RouterGroup, repo TxnRepo) {
+func RegisterTransactionRoutes(r *gin.RouterGroup, repo repositories.TxnRepo) {
 	h := NewTransactionsHandler(repo)
 	txns := r.Group("/transactions")
 	{

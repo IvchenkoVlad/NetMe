@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
 // ─── Mock ────────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ func (m *mockTxnRepo) GetTransactionsByUserID(userID, accountID, month string, l
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-func txnRouter(repo handlers.TxnRepo) *gin.Engine {
+func txnRouter(repo repositories.TxnRepo) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) {

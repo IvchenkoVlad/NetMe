@@ -11,7 +11,10 @@ import (
 
 type PlaidService struct {
 	client          *plaid.APIClient
-	plaidRepo       *repositories.PlaidRepository
+	itemRepo        *repositories.PlaidItemRepository
+	acctRepo        *repositories.AccountRepository
+	txnRepo         *repositories.TransactionRepository
+	eventRepo       *repositories.EventRepository
 	rulesRepo       *repositories.RulesRepository
 	WebhookVerifier *WebhookVerifier
 }
@@ -24,7 +27,14 @@ type SyncResult struct {
 	HasMore    bool
 }
 
-func NewPlaidService(clientID, secret, env string, repo *repositories.PlaidRepository, rulesRepo *repositories.RulesRepository) *PlaidService {
+func NewPlaidService(
+	clientID, secret, env string,
+	itemRepo *repositories.PlaidItemRepository,
+	acctRepo *repositories.AccountRepository,
+	txnRepo *repositories.TransactionRepository,
+	eventRepo *repositories.EventRepository,
+	rulesRepo *repositories.RulesRepository,
+) *PlaidService {
 	cfg := plaid.NewConfiguration()
 	cfg.AddDefaultHeader("PLAID-CLIENT-ID", clientID)
 	cfg.AddDefaultHeader("PLAID-SECRET", secret)
@@ -38,7 +48,10 @@ func NewPlaidService(clientID, secret, env string, repo *repositories.PlaidRepos
 	client := plaid.NewAPIClient(cfg)
 	return &PlaidService{
 		client:          client,
-		plaidRepo:       repo,
+		itemRepo:        itemRepo,
+		acctRepo:        acctRepo,
+		txnRepo:         txnRepo,
+		eventRepo:       eventRepo,
 		rulesRepo:       rulesRepo,
 		WebhookVerifier: NewWebhookVerifier(client, env),
 	}
@@ -73,20 +86,20 @@ func (s *PlaidService) ExchangeAndStore(ctx context.Context, userID, publicToken
 		instName = &institutionName
 	}
 
-	item, err := s.plaidRepo.CreateItem(userID, itemID, accessToken, instID, instName)
+	item, err := s.itemRepo.CreateItem(userID, itemID, accessToken, instID, instName)
 	if err != nil {
 		return nil, fmt.Errorf("store item: %w", err)
 	}
 
 	accounts, err := s.getAccounts(ctx, accessToken)
 	if err == nil {
-		s.plaidRepo.LogRawEvent(userID, "exchange_accounts", accounts)
+		s.eventRepo.LogRawEvent(userID, "exchange_accounts", accounts)
 		for _, pa := range accounts {
-			_ = s.plaidRepo.UpsertAccount(accountFromPlaid(userID, item.ID, pa))
+			_ = s.acctRepo.UpsertAccount(accountFromPlaid(userID, item.ID, pa))
 		}
 	}
 
-	s.plaidRepo.LogRawEvent(userID, "exchange", map[string]any{
+	s.eventRepo.LogRawEvent(userID, "exchange", map[string]any{
 		"item_id":          itemID,
 		"institution_id":   institutionID,
 		"institution_name": institutionName,
@@ -98,7 +111,7 @@ func (s *PlaidService) ExchangeAndStore(ctx context.Context, userID, publicToken
 // SyncItem syncs a single Plaid item identified by its internal UUID.
 // Used by the webhook handler so only the affected item is synced.
 func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (int, error) {
-	item, accessToken, err := s.plaidRepo.GetItemByID(itemUUID)
+	item, accessToken, err := s.itemRepo.GetItemByID(itemUUID)
 	if err != nil {
 		return 0, fmt.Errorf("load item: %w", err)
 	}
@@ -107,7 +120,7 @@ func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (i
 		return added, err
 	}
 	if finalCursor != "" {
-		_ = s.plaidRepo.UpdateCursor(itemUUID, finalCursor)
+		_ = s.itemRepo.UpdateCursor(itemUUID, finalCursor)
 	}
 	if s.rulesRepo != nil {
 		_ = s.rulesRepo.ApplyCategoryRules(userID)
@@ -117,7 +130,7 @@ func (s *PlaidService) SyncItem(ctx context.Context, userID, itemUUID string) (i
 
 // SyncForUser syncs all Plaid items for a user in sequence.
 func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, error) {
-	items, err := s.plaidRepo.GetAllItemsForSync(userID)
+	items, err := s.itemRepo.GetAllItemsForSync(userID)
 	if err != nil {
 		return 0, fmt.Errorf("load items: %w", err)
 	}
@@ -129,7 +142,7 @@ func (s *PlaidService) SyncForUser(ctx context.Context, userID string) (int, err
 			continue // already logged inside drainPages
 		}
 		if finalCursor != "" {
-			_ = s.plaidRepo.UpdateCursor(entry.Item.ID, finalCursor)
+			_ = s.itemRepo.UpdateCursor(entry.Item.ID, finalCursor)
 		}
 	}
 	if s.rulesRepo != nil {
@@ -145,35 +158,35 @@ func (s *PlaidService) drainPages(ctx context.Context, userID, plaidItemID, acce
 	for {
 		result, err := s.syncPage(ctx, accessToken, cursor)
 		if err != nil {
-			s.plaidRepo.LogRawEvent(userID, "sync_error", map[string]any{
+			s.eventRepo.LogRawEvent(userID, "sync_error", map[string]any{
 				"item_id": plaidItemID,
 				"error":   err.Error(),
 			})
 			return added, cursor, err
 		}
-		s.plaidRepo.LogRawEvent(userID, "sync_result", map[string]any{
+		s.eventRepo.LogRawEvent(userID, "sync_result", map[string]any{
 			"item_id":  plaidItemID,
 			"added":    len(result.Added),
 			"modified": len(result.Modified),
 			"removed":  len(result.Removed),
 		})
 		for _, pt := range result.Added {
-			acct, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			acct, err := s.acctRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
 			if err != nil {
 				continue
 			}
-			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
+			_ = s.txnRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
 			added++
 		}
 		for _, pt := range result.Modified {
-			acct, err := s.plaidRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
+			acct, err := s.acctRepo.GetAccountByPlaidID(pt.GetAccountId(), userID)
 			if err != nil {
 				continue
 			}
-			_ = s.plaidRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
+			_ = s.txnRepo.UpsertTransaction(txnFromPlaid(userID, acct.ID, pt))
 		}
 		for _, rt := range result.Removed {
-			_ = s.plaidRepo.RemoveTransaction(rt.GetTransactionId())
+			_ = s.txnRepo.RemoveTransaction(rt.GetTransactionId())
 		}
 		cursor = result.NextCursor
 		if !result.HasMore {
@@ -186,7 +199,7 @@ func (s *PlaidService) drainPages(ctx context.Context, userID, plaidItemID, acce
 // RevokeAllItems calls Plaid's /item/remove for every item owned by the user.
 // Errors are logged but do not block account deletion — the DB cascade handles cleanup.
 func (s *PlaidService) RevokeAllItems(ctx context.Context, userID string) {
-	items, err := s.plaidRepo.GetAllItemsForSync(userID)
+	items, err := s.itemRepo.GetAllItemsForSync(userID)
 	if err != nil {
 		return
 	}

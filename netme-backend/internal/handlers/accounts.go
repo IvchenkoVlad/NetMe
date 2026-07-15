@@ -9,20 +9,20 @@ import (
 )
 
 type AccountsHandler struct {
-	plaidRepo *repositories.PlaidRepository
+	repo repositories.AccountLister
 }
 
-func NewAccountsHandler(repo *repositories.PlaidRepository) *AccountsHandler {
-	return &AccountsHandler{plaidRepo: repo}
+func NewAccountsHandler(repo repositories.AccountLister) *AccountsHandler {
+	return &AccountsHandler{repo: repo}
 }
 
-func RegisterAccountRoutes(r *gin.RouterGroup, repo *repositories.PlaidRepository) {
+func RegisterAccountRoutes(r *gin.RouterGroup, repo repositories.AccountLister) {
 	h := NewAccountsHandler(repo)
 	r.Group("/accounts").GET("", h.ListAccounts)
 }
 
 func (h *AccountsHandler) ListAccounts(c *gin.Context) {
-	accounts, err := h.plaidRepo.GetAccountsByUserID(uid(c))
+	accounts, err := h.repo.GetAccountsByUserID(uid(c))
 	if err != nil {
 		dbErr(c, "failed to load accounts")
 		return

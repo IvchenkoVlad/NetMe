@@ -9,16 +9,16 @@ import (
 )
 
 type AnalyticsHandler struct {
-	plaid  *repositories.PlaidRepository
-	budget *repositories.BudgetRepository
+	netWorth repositories.NetWorthReader
+	budget   *repositories.BudgetRepository
 }
 
-func NewAnalyticsHandler(plaid *repositories.PlaidRepository, budget *repositories.BudgetRepository) *AnalyticsHandler {
-	return &AnalyticsHandler{plaid: plaid, budget: budget}
+func NewAnalyticsHandler(netWorth repositories.NetWorthReader, budget *repositories.BudgetRepository) *AnalyticsHandler {
+	return &AnalyticsHandler{netWorth: netWorth, budget: budget}
 }
 
-func RegisterAnalyticsRoutes(r *gin.RouterGroup, plaid *repositories.PlaidRepository, budget *repositories.BudgetRepository) {
-	h := NewAnalyticsHandler(plaid, budget)
+func RegisterAnalyticsRoutes(r *gin.RouterGroup, netWorth repositories.NetWorthReader, budget *repositories.BudgetRepository) {
+	h := NewAnalyticsHandler(netWorth, budget)
 	r.GET("/analytics/overview", h.Overview)
 }
 
@@ -28,7 +28,7 @@ func (h *AnalyticsHandler) Overview(c *gin.Context) {
 	userID := uid(c)
 	month := currentMonth()
 
-	nw, err := h.plaid.GetNetWorth(userID)
+	nw, err := h.netWorth.GetNetWorth(userID)
 	if err != nil {
 		dbErr(c, err.Error())
 		return

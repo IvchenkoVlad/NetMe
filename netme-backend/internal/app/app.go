@@ -50,7 +50,10 @@ func New() (*App, error) {
 
 	userRepo := repositories.NewUserRepository(database)
 	tokenRepo := repositories.NewTokenRepository(database)
-	plaidRepo := repositories.NewPlaidRepository(database, plaidKey)
+	itemRepo := repositories.NewPlaidItemRepository(database, plaidKey)
+	acctRepo := repositories.NewAccountRepository(database)
+	txnRepo := repositories.NewTransactionRepository(database)
+	eventRepo := repositories.NewEventRepository(database)
 	budgetRepo := repositories.NewBudgetRepository(database)
 	rulesRepo := repositories.NewRulesRepository(database)
 
@@ -63,7 +66,10 @@ func New() (*App, error) {
 		os.Getenv("PLAID_CLIENT_ID"),
 		os.Getenv("PLAID_SECRET"),
 		os.Getenv("PLAID_ENV"),
-		plaidRepo,
+		itemRepo,
+		acctRepo,
+		txnRepo,
+		eventRepo,
 		rulesRepo,
 	)
 
@@ -93,15 +99,15 @@ func New() (*App, error) {
 		protected.POST("/auth/logout", authHandler.Logout)
 		protected.GET("/me", usersHandler.GetMe)
 		protected.DELETE("/me", usersHandler.DeleteMe)
-		handlers.RegisterAccountRoutes(protected, plaidRepo)
-		handlers.RegisterTransactionRoutes(protected, plaidRepo)
-		handlers.RegisterPlaidRoutes(protected, v1, plaidSvc, plaidRepo)
+		handlers.RegisterAccountRoutes(protected, acctRepo)
+		handlers.RegisterTransactionRoutes(protected, txnRepo)
+		handlers.RegisterPlaidRoutes(protected, v1, plaidSvc, itemRepo, eventRepo)
 		handlers.RegisterBudgetRoutes(protected, budgetRepo)
 		handlers.RegisterRulesRoutes(protected, rulesRepo)
-		handlers.RegisterAnalyticsRoutes(protected, plaidRepo, budgetRepo)
+		handlers.RegisterAnalyticsRoutes(protected, acctRepo, budgetRepo)
 	}
 
-	scheduler := jobs.NewScheduler(plaidSvc, plaidRepo, log)
+	scheduler := jobs.NewScheduler(plaidSvc, itemRepo, acctRepo, eventRepo, log)
 	go scheduler.Start(context.Background())
 
 	return &App{

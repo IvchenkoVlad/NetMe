@@ -7,25 +7,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
-// RulesRepo is the subset of RulesRepository used by rules handlers.
-type RulesRepo interface {
-	Upsert(userID, normalizedMerchant, categoryID string) (*models.CategoryRule, error)
-	ApplyToPast(userID, normalizedMerchant, categoryID string) (int64, error)
-	List(userID string) ([]*models.CategoryRule, error)
-	Delete(userID, id string) error
-}
-
 type RulesHandler struct {
-	repo RulesRepo
+	repo repositories.RulesRepo
 }
 
-func NewRulesHandler(repo RulesRepo) *RulesHandler {
+func NewRulesHandler(repo repositories.RulesRepo) *RulesHandler {
 	return &RulesHandler{repo: repo}
 }
 
-func RegisterRulesRoutes(r *gin.RouterGroup, repo RulesRepo) {
+func RegisterRulesRoutes(r *gin.RouterGroup, repo repositories.RulesRepo) {
 	h := NewRulesHandler(repo)
 	rules := r.Group("/rules")
 	{

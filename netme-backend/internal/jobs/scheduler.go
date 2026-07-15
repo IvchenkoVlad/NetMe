@@ -10,16 +10,30 @@ import (
 )
 
 // Scheduler runs periodic background jobs using in-process tickers.
-// It is designed for single-instance MVP deployments; replace with
-// a distributed queue (e.g. Asynq) when running multiple replicas.
+// Designed for single-instance MVP deployments; replace with a distributed
+// queue (e.g. Asynq) when running multiple replicas.
 type Scheduler struct {
 	plaidSvc  *services.PlaidService
-	plaidRepo *repositories.PlaidRepository
+	itemRepo  *repositories.PlaidItemRepository
+	acctRepo  *repositories.AccountRepository
+	eventRepo *repositories.EventRepository
 	log       *slog.Logger
 }
 
-func NewScheduler(plaidSvc *services.PlaidService, plaidRepo *repositories.PlaidRepository, log *slog.Logger) *Scheduler {
-	return &Scheduler{plaidSvc: plaidSvc, plaidRepo: plaidRepo, log: log}
+func NewScheduler(
+	plaidSvc *services.PlaidService,
+	itemRepo *repositories.PlaidItemRepository,
+	acctRepo *repositories.AccountRepository,
+	eventRepo *repositories.EventRepository,
+	log *slog.Logger,
+) *Scheduler {
+	return &Scheduler{
+		plaidSvc:  plaidSvc,
+		itemRepo:  itemRepo,
+		acctRepo:  acctRepo,
+		eventRepo: eventRepo,
+		log:       log,
+	}
 }
 
 // Start launches all background jobs and blocks until ctx is cancelled.
@@ -51,7 +65,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 }
 
 func (s *Scheduler) runSync(ctx context.Context) {
-	userIDs, err := s.plaidRepo.GetAllUserIDsWithItems()
+	userIDs, err := s.itemRepo.GetAllUserIDsWithItems()
 	if err != nil {
 		s.log.Error("daily sync: failed to load users", "err", err)
 		return
@@ -71,7 +85,7 @@ func (s *Scheduler) runSync(ctx context.Context) {
 }
 
 func (s *Scheduler) runDataRetentionPurge() {
-	n, err := s.plaidRepo.PurgeOldRawEvents(90)
+	n, err := s.eventRepo.PurgeOldRawEvents(90)
 	if err != nil {
 		s.log.Error("data retention purge: failed", "err", err)
 		return
@@ -80,7 +94,7 @@ func (s *Scheduler) runDataRetentionPurge() {
 }
 
 func (s *Scheduler) runNetWorthSnapshots(ctx context.Context) {
-	userIDs, err := s.plaidRepo.GetAllUserIDsWithItems()
+	userIDs, err := s.itemRepo.GetAllUserIDsWithItems()
 	if err != nil {
 		s.log.Error("net worth snapshot: failed to load users", "err", err)
 		return
@@ -89,7 +103,7 @@ func (s *Scheduler) runNetWorthSnapshots(ctx context.Context) {
 
 	failed := 0
 	for _, uid := range userIDs {
-		if err := s.plaidRepo.TakeNetWorthSnapshot(uid); err != nil {
+		if err := s.acctRepo.TakeNetWorthSnapshot(uid); err != nil {
 			s.log.Error("net worth snapshot: user failed", "user_id", uid, "err", err)
 			failed++
 		}

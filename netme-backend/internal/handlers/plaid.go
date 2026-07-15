@@ -15,15 +15,16 @@ import (
 
 type PlaidHandler struct {
 	plaidSvc  *services.PlaidService
-	plaidRepo *repositories.PlaidRepository
+	itemRepo  repositories.PlaidItemGetter
+	eventRepo repositories.EventLogger
 }
 
-func NewPlaidHandler(svc *services.PlaidService, repo *repositories.PlaidRepository) *PlaidHandler {
-	return &PlaidHandler{plaidSvc: svc, plaidRepo: repo}
+func NewPlaidHandler(svc *services.PlaidService, itemRepo repositories.PlaidItemGetter, eventRepo repositories.EventLogger) *PlaidHandler {
+	return &PlaidHandler{plaidSvc: svc, itemRepo: itemRepo, eventRepo: eventRepo}
 }
 
-func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *services.PlaidService, repo *repositories.PlaidRepository) {
-	h := NewPlaidHandler(svc, repo)
+func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *services.PlaidService, itemRepo repositories.PlaidItemGetter, eventRepo repositories.EventLogger) {
+	h := NewPlaidHandler(svc, itemRepo, eventRepo)
 	plaid := r.Group("/plaid")
 	{
 		plaid.POST("/link-token", h.CreateLinkToken)
@@ -32,8 +33,6 @@ func RegisterPlaidRoutes(r *gin.RouterGroup, public *gin.RouterGroup, svc *servi
 		plaid.GET("/items", h.ListItems)
 	}
 	public.GET("/plaid/link-page", h.LinkPage)
-	// Webhook is unauthenticated — Plaid calls it directly.
-	// TODO: add Plaid JWT signature verification before production launch.
 	public.POST("/plaid/webhook", h.Webhook)
 }
 
@@ -75,7 +74,7 @@ func (h *PlaidHandler) SyncTransactions(c *gin.Context) {
 }
 
 func (h *PlaidHandler) ListItems(c *gin.Context) {
-	items, err := h.plaidRepo.GetItemsByUserID(uid(c))
+	items, err := h.itemRepo.GetItemsByUserID(uid(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errResp("database_error", "failed to load items"))
 		return
@@ -93,7 +92,6 @@ func (h *PlaidHandler) ListItems(c *gin.Context) {
 //   - TRANSACTIONS / SYNC_UPDATES_AVAILABLE, DEFAULT_UPDATE, INITIAL_UPDATE → trigger item sync
 //   - ITEM / ERROR → log for investigation
 func (h *PlaidHandler) Webhook(c *gin.Context) {
-	// Read raw body so we can verify the signature before parsing.
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.Status(http.StatusBadRequest)
@@ -122,7 +120,7 @@ func (h *PlaidHandler) Webhook(c *gin.Context) {
 		return
 	}
 
-	h.plaidRepo.LogRawEvent("", "webhook_received", map[string]any{
+	h.eventRepo.LogRawEvent("", "webhook_received", map[string]any{
 		"type": payload.WebhookType,
 		"code": payload.WebhookCode,
 		"item": payload.ItemID,
@@ -137,7 +135,7 @@ func (h *PlaidHandler) Webhook(c *gin.Context) {
 		case "TRANSACTIONS":
 			switch payload.WebhookCode {
 			case "SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "RECURRING_TRANSACTIONS_UPDATE":
-				item, _, err := h.plaidRepo.GetItemByPlaidItemID(payload.ItemID)
+				item, _, err := h.itemRepo.GetItemByPlaidItemID(payload.ItemID)
 				if err != nil {
 					return
 				}
@@ -145,7 +143,7 @@ func (h *PlaidHandler) Webhook(c *gin.Context) {
 			}
 		case "ITEM":
 			if payload.Error != nil {
-				h.plaidRepo.LogRawEvent("", "webhook_item_error", map[string]any{
+				h.eventRepo.LogRawEvent("", "webhook_item_error", map[string]any{
 					"item_id":       payload.ItemID,
 					"error_type":    payload.Error.ErrorType,
 					"error_code":    payload.Error.ErrorCode,

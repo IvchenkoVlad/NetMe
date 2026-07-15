@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vladyslavivchenko/netme/internal/handlers"
 	"github.com/vladyslavivchenko/netme/internal/models"
+	"github.com/vladyslavivchenko/netme/internal/repositories"
 )
 
 // ─── Mock ────────────────────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ func (m *mockRulesRepo) List(userID string) ([]*models.CategoryRule, error) {
 	return out, nil
 }
 
+func (m *mockRulesRepo) ApplyCategoryRules(userID string) error { return nil }
+
 func (m *mockRulesRepo) Delete(userID, id string) error {
 	r, ok := m.rules[id]
 	if !ok || r.UserID != userID {
@@ -66,7 +69,7 @@ func (m *mockRulesRepo) Delete(userID, id string) error {
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-func rulesRouter(repo handlers.RulesRepo) *gin.Engine {
+func rulesRouter(repo repositories.RulesRepo) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
