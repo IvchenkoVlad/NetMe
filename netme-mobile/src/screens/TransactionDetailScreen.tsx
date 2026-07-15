@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { transactionService, Transaction } from '../services/transactionService';
 import { budgetService, Category } from '../services/budgetService';
 import { fmt, fmtDateLong } from '../utils/format';
-import { GLASS } from '../styles/theme';
+import { GLASS, COLORS } from '../styles/theme';
 
 const normalize = (name: string) => name.toLowerCase().trim();
 
@@ -121,7 +121,7 @@ export const TransactionDetailScreen: React.FC<{ route: any; navigation: any }> 
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color="#2dd4a7" style={{ marginTop: 80 }} />
+        <ActivityIndicator size="large" color={COLORS.teal} style={{ marginTop: 80 }} />
       </View>
     );
   }
@@ -176,7 +176,7 @@ export const TransactionDetailScreen: React.FC<{ route: any; navigation: any }> 
         </View>
       </TouchableOpacity>
 
-      {saving && <ActivityIndicator color="#2dd4a7" style={{ marginTop: 12 }} />}
+      {saving && <ActivityIndicator color={COLORS.teal} style={{ marginTop: 12 }} />}
 
       {/* Category Picker Modal */}
       <Modal
@@ -226,9 +226,9 @@ export const TransactionDetailScreen: React.FC<{ route: any; navigation: any }> 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
+  container: { flex: 1, backgroundColor: COLORS.bg, padding: 16 },
   backBtn: { marginBottom: 16 },
-  backBtnText: { color: '#2dd4a7', fontSize: 16 },
+  backBtnText: { color: COLORS.teal, fontSize: 16 },
   card: { padding: 20, marginBottom: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   amount: { fontSize: 36, fontWeight: '700', color: '#f1f5f9', marginBottom: 4 },
@@ -257,5 +257,5 @@ const styles = StyleSheet.create({
   },
   catIcon: { fontSize: 20, width: 32 },
   catName: { flex: 1, fontSize: 15, color: '#f1f5f9' },
-  checkmark: { color: '#2dd4a7', fontSize: 16, fontWeight: '700' },
+  checkmark: { color: COLORS.teal, fontSize: 16, fontWeight: '700' },
 });

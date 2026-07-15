@@ -20,7 +20,7 @@ import { PlaidLinkModal } from './PlaidLinkScreen';
 import { PlaidConsentModal } from './PlaidConsentModal';
 import { Transaction } from '../services/transactionService';
 import { fmt, fmtDateLong } from '../utils/format';
-import { GLASS } from '../styles/theme';
+import { GLASS, COLORS } from '../styles/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ type ViewMode = 'byBank' | 'overview';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BANK_COLORS = ['#2dd4a7', '#60a5fa', '#f97316', '#a78bfa', '#f43f5e', '#facc15'];
+const BANK_COLORS = [COLORS.teal, '#60a5fa', '#f97316', '#a78bfa', '#f43f5e', '#facc15'];
 const TRIAL_BANK_LIMIT = 1;
 
 const isDebt = (type: string) => type === 'credit' || type === 'loan';
@@ -135,7 +135,7 @@ const AccountTransactionsModal: React.FC<{ account: Account | null; onClose: () 
           )}
         </View>
         {loading ? (
-          <View style={t.center}><ActivityIndicator color="#2dd4a7" /></View>
+          <View style={t.center}><ActivityIndicator color={COLORS.teal} /></View>
         ) : transactions.length === 0 ? (
           <View style={t.center}><Text style={t.empty}>No transactions yet</Text></View>
         ) : (
@@ -194,7 +194,7 @@ const AccountCard = ({
       activeOpacity={0.7}
     >
       <View style={s.cardLeft}>
-        <View style={[s.dot, { backgroundColor: debt ? '#f97316' : '#2dd4a7' }]} />
+        <View style={[s.dot, { backgroundColor: debt ? '#f97316' : COLORS.teal }]} />
         <View style={{ flex: 1 }}>
           <Text style={s.cardName} numberOfLines={1}>{account.name}</Text>
           <Text style={s.cardSub} numberOfLines={1}>
@@ -444,7 +444,7 @@ export const AccountsScreen: React.FC = () => {
   const banks = groupByBank(accounts);
 
   if (loading) {
-    return <View style={s.center}><ActivityIndicator size="large" color="#2dd4a7" /></View>;
+    return <View style={s.center}><ActivityIndicator size="large" color={COLORS.teal} /></View>;
   }
 
   return (
@@ -452,7 +452,7 @@ export const AccountsScreen: React.FC = () => {
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2dd4a7" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.teal} />}
       >
         {/* Hero */}
         <View style={s.hero}>
@@ -535,14 +535,14 @@ const s = StyleSheet.create({
   totalDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.15)' },
   totalLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   totalValue: { color: '#fff', fontSize: 26, fontWeight: '700' },
-  debtValue: { color: '#fca5a5' },
+  debtValue: { color: COLORS.red },
 
   // View toggle
   toggle: { flexDirection: 'row', ...GLASS, padding: 4, gap: 4 },
   toggleBtn: { flex: 1, paddingVertical: 8, borderRadius: 12, alignItems: 'center' },
   toggleBtnActive: { backgroundColor: 'rgba(45,212,167,0.2)', borderWidth: 1, borderColor: 'rgba(45,212,167,0.35)' },
-  toggleText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '500' },
-  toggleTextActive: { color: '#2dd4a7', fontWeight: '600' },
+  toggleText: { color: COLORS.muted, fontSize: 14, fontWeight: '500' },
+  toggleTextActive: { color: COLORS.teal, fontWeight: '600' },
 
   // By Bank
   bankBlock: { gap: 0 },
@@ -556,7 +556,7 @@ const s = StyleSheet.create({
   bankColorDot: { width: 10, height: 10, borderRadius: 5 },
   bankName: { flex: 1, fontSize: 15, fontWeight: '700', color: '#fff' },
   bankTotal: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.6)' },
-  bankChevron: { fontSize: 18, color: 'rgba(255,255,255,0.4)', marginLeft: 4 },
+  bankChevron: { fontSize: 18, color: COLORS.muted, marginLeft: 4 },
   bankCards: { gap: 6, paddingTop: 6 },
 
   // Overview
@@ -575,10 +575,10 @@ const s = StyleSheet.create({
   cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   cardName: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  cardSub: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1, textTransform: 'capitalize' },
+  cardSub: { fontSize: 12, color: COLORS.muted, marginTop: 1, textTransform: 'capitalize' },
   cardRight: { alignItems: 'flex-end' },
   cardBalance: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  cardDebt: { color: '#fca5a5' },
+  cardDebt: { color: COLORS.red },
   cardAvail: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 },
 
   // Empty
@@ -603,16 +603,16 @@ const s = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#2dd4a7',
+    backgroundColor: COLORS.teal,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2dd4a7',
+    shadowColor: COLORS.teal,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
   },
-  fabIcon: { color: '#0f172a', fontSize: 28, fontWeight: '300', lineHeight: 32 },
+  fabIcon: { color: COLORS.bg, fontSize: 28, fontWeight: '300', lineHeight: 32 },
 });
 
 // Transaction modal (system sheet — stays light)
@@ -621,18 +621,18 @@ const t = StyleSheet.create({
   dragArea: { paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#cbd5e1', alignSelf: 'center', marginBottom: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingBottom: 14 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#1e3a5f' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.navy },
   headerSub: { fontSize: 13, color: '#64748b', marginTop: 2, textTransform: 'capitalize' },
-  closeTxt: { fontSize: 16, color: '#2dd4a7', fontWeight: '600' },
+  closeTxt: { fontSize: 16, color: COLORS.teal, fontWeight: '600' },
   balanceRow: { flexDirection: 'row', backgroundColor: '#f8fafc', paddingVertical: 14, paddingHorizontal: 20, gap: 32, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   balanceItem: {},
   balanceLabel: { fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  balanceValue: { fontSize: 20, fontWeight: '700', color: '#1e3a5f' },
+  balanceValue: { fontSize: 20, fontWeight: '700', color: COLORS.navy },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { color: '#94a3b8', fontSize: 15 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 },
   left: { flex: 1, paddingRight: 12 },
-  name: { fontSize: 14, fontWeight: '500', color: '#1e3a5f' },
+  name: { fontSize: 14, fontWeight: '500', color: COLORS.navy },
   meta: { fontSize: 12, color: '#94a3b8', marginTop: 2, textTransform: 'capitalize' },
   amount: { fontSize: 14, fontWeight: '600', color: '#ef4444' },
   positive: { color: '#16a34a' },

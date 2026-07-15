@@ -15,7 +15,7 @@ import { plaidService } from '../services/plaidService';
 import { analyticsService, AnalyticsOverview } from '../services/analyticsService';
 import { Transaction } from '../services/transactionService';
 import { fmt, fmtDate, currentMonth } from '../utils/format';
-import { GLASS } from '../styles/theme';
+import { GLASS, COLORS } from '../styles/theme';
 
 export const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -63,12 +63,12 @@ export const HomeScreen: React.FC = () => {
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       {loading ? (
-        <View style={s.center}><ActivityIndicator color="#2dd4a7" /></View>
+        <View style={s.center}><ActivityIndicator color={COLORS.teal} /></View>
       ) : (
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2dd4a7" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.teal} />}
         >
           {/* Net Worth */}
           {nw != null && (
@@ -187,7 +187,7 @@ const s = StyleSheet.create({
 
   card: { ...GLASS, padding: 16 },
   cardTitle: {
-    fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.4)',
+    fontSize: 12, fontWeight: '700', color: COLORS.muted,
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12,
   },
 
@@ -211,10 +211,10 @@ const s = StyleSheet.create({
   savedRow: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
     paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: COLORS.mutedLight,
   },
   savedLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
-  savedValue: { fontSize: 15, fontWeight: '700', color: '#4ade80' },
+  savedValue: { fontSize: 15, fontWeight: '700', color: COLORS.green },
 
   // Top categories
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
@@ -224,23 +224,23 @@ const s = StyleSheet.create({
   catLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   catName: { fontSize: 13, fontWeight: '500', color: '#fff' },
   catSpent: { fontSize: 13, fontWeight: '700', color: '#fff' },
-  barTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' },
+  barTrack: { height: 4, backgroundColor: COLORS.mutedLight, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 2 },
 
   // Over budget
   alertRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 10 },
   alertIcon: { fontSize: 20 },
   alertName: { flex: 1, fontSize: 14, fontWeight: '500', color: '#fff' },
-  alertOver: { fontSize: 13, color: '#fca5a5', fontWeight: '600' },
+  alertOver: { fontSize: 13, color: COLORS.red, fontWeight: '600' },
 
   // Transactions
   txnRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 12 },
   txnLeft: { flex: 1 },
   txnName: { fontSize: 14, fontWeight: '500', color: '#fff' },
-  txnDate: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  txnDate: { fontSize: 11, color: COLORS.muted, marginTop: 2 },
   txnAmount: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  incomeColor: { color: '#4ade80' },
-  overColor: { color: '#fca5a5' },
-  emptyText: { fontSize: 14, color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingVertical: 8 },
+  incomeColor: { color: COLORS.green },
+  overColor: { color: COLORS.red },
+  emptyText: { fontSize: 14, color: COLORS.muted, textAlign: 'center', paddingVertical: 8 },
 });

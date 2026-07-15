@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import WebView from 'react-native-webview';
 import { plaidService } from '../services/plaidService';
+import { COLORS } from '../styles/theme';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1';
 
@@ -89,7 +90,7 @@ export const PlaidLinkModal: React.FC<Props> = ({ visible, onSuccess, onClose })
 
         {(loading || !pageUrl) && !error && (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2dd4a7" />
+            <ActivityIndicator size="large" color={COLORS.teal} />
             <Text style={styles.loadingText}>Preparing secure connection…</Text>
           </View>
         )}
@@ -135,14 +136,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#1e3a5f' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: COLORS.navy },
   closeButton: { padding: 4 },
-  closeText: { fontSize: 16, color: '#2dd4a7', fontWeight: '500' },
+  closeText: { fontSize: 16, color: COLORS.teal, fontWeight: '500' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   loadingText: { marginTop: 12, color: '#666', fontSize: 15 },
   errorText: { color: '#e53e3e', fontSize: 15, textAlign: 'center', marginBottom: 16 },
   retryButton: {
-    backgroundColor: '#2dd4a7',
+    backgroundColor: COLORS.teal,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,

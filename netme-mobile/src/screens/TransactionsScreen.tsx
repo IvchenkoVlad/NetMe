@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { plaidService } from '../services/plaidService';
 import { Transaction } from '../services/transactionService';
 import { fmt, fmtDate, currentMonth, addMonths, monthLabel } from '../utils/format';
-import { GLASS } from '../styles/theme';
+import { GLASS, COLORS } from '../styles/theme';
 
 const PAGE_SIZE = 50;
 
@@ -52,9 +52,9 @@ const r = StyleSheet.create({
   },
   left: { flex: 1, paddingRight: 12 },
   name: { fontSize: 14, fontWeight: '500', color: '#fff' },
-  meta: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2, textTransform: 'capitalize' },
-  amount: { fontSize: 14, fontWeight: '700', color: '#fca5a5' },
-  income: { color: '#4ade80' },
+  meta: { fontSize: 12, color: COLORS.muted, marginTop: 2, textTransform: 'capitalize' },
+  amount: { fontSize: 14, fontWeight: '700', color: COLORS.red },
+  income: { color: COLORS.green },
 });
 
 // ─── Separator ────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ export const TransactionsScreen: React.FC = () => {
       </View>
 
       {loading ? (
-        <View style={s.center}><ActivityIndicator color="#2dd4a7" /></View>
+        <View style={s.center}><ActivityIndicator color={COLORS.teal} /></View>
       ) : (
         <FlatList
           data={txns}
@@ -149,7 +149,7 @@ export const TransactionsScreen: React.FC = () => {
           ItemSeparatorComponent={Separator}
           contentContainerStyle={txns.length === 0 ? s.emptyContainer : s.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2dd4a7" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.teal} />
           }
           onEndReached={onEndReached}
           onEndReachedThreshold={0.3}
@@ -162,7 +162,7 @@ export const TransactionsScreen: React.FC = () => {
           }
           ListFooterComponent={
             loadingMore ? (
-              <View style={s.footer}><ActivityIndicator color="#2dd4a7" size="small" /></View>
+              <View style={s.footer}><ActivityIndicator color={COLORS.teal} size="small" /></View>
             ) : null
           }
           style={s.list}

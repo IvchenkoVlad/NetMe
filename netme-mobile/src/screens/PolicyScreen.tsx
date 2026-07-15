@@ -9,6 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { COLORS } from '../styles/theme';
 
 type PolicyType = 'privacy' | 'terms';
 
@@ -112,10 +113,10 @@ const s = StyleSheet.create({
     borderBottomColor: '#eee',
   },
   back: { minWidth: 60 },
-  backText: { fontSize: 17, color: '#2dd4a7' },
+  backText: { fontSize: 17, color: COLORS.teal },
   title: { flex: 1, fontSize: 17, fontWeight: '600', color: '#1e293b', textAlign: 'center' },
   webLink: { minWidth: 60, alignItems: 'flex-end' },
-  webLinkText: { fontSize: 14, color: '#2dd4a7' },
+  webLinkText: { fontSize: 14, color: COLORS.teal },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 48 },
   body: { fontSize: 14, color: '#374151', lineHeight: 22 },

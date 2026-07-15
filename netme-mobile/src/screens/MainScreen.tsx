@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../styles/theme';
 import { HomeScreen } from './HomeScreen';
 import { AccountsScreen } from './AccountsScreen';
 import { BudgetScreen } from './BudgetScreen';
@@ -85,7 +86,7 @@ export const MainScreen = () => {
 
   return (
     // Full-screen gradient — the single background for the whole app
-    <LinearGradient colors={['#2dd4a7', '#1e3a5f', '#0f172a']} locations={[0, 0.3, 1]} style={s.root}>
+    <LinearGradient colors={[COLORS.teal, COLORS.navy, COLORS.bg]} locations={[0, 0.3, 1]} style={s.root}>
       <StatusBar barStyle="light-content" />
 
       {/* Pager — transparent, gradient shows through */}
@@ -177,19 +178,19 @@ const s = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: COLORS.mutedLight,
   },
   pillActive: {
     backgroundColor: 'rgba(45,212,167,0.15)',
     borderColor: 'rgba(45,212,167,0.45)',
   },
   pillText: {
-    color: 'rgba(255,255,255,0.4)',
+    color: COLORS.muted,
     fontSize: 14,
     fontWeight: '500',
   },
   pillTextActive: {
-    color: '#2dd4a7',
+    color: COLORS.teal,
     fontWeight: '600',
   },
 

@@ -18,6 +18,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import { useAuth } from '../context/AuthContext';
+import { COLORS } from '../styles/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -78,7 +79,7 @@ export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#2dd4a7', '#1e3a5f', '#0f172a']}
+        colors={[COLORS.teal, COLORS.navy, COLORS.bg]}
         locations={[0, 0.45, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -157,7 +158,7 @@ export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#4a90e2', '#2dd4a7']}
+              colors={['#4a90e2', COLORS.teal]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.button}
@@ -203,7 +204,7 @@ export const RegisterScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: COLORS.bg,
   },
   scroll: {
     flexGrow: 1,
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0f172a',
+    color: COLORS.bg,
     marginBottom: 22,
   },
   field: {
@@ -264,7 +265,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 15,
-    color: '#0f172a',
+    color: COLORS.bg,
   },
   inputError: {
     borderColor: '#f43f5e',
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     height: 18,
   },
   googleButtonText: {
-    color: '#0f172a',
+    color: COLORS.bg,
     fontSize: 15,
     fontWeight: '600',
   },

@@ -1,4 +1,5 @@
 import React from 'react';
+import { COLORS } from '../styles/theme';
 import {
   Modal,
   View,
@@ -74,10 +75,10 @@ const s = StyleSheet.create({
   },
   appBadge: {
     width: 52, height: 52, borderRadius: 14,
-    backgroundColor: '#0f172a',
+    backgroundColor: COLORS.bg,
     justifyContent: 'center', alignItems: 'center',
   },
-  appBadgeText: { color: '#2dd4a7', fontSize: 22, fontWeight: '800' },
+  appBadgeText: { color: COLORS.teal, fontSize: 22, fontWeight: '800' },
   connector: { width: 28, height: 2, backgroundColor: '#e2e8f0', marginHorizontal: 4 },
   plaidBadge: {
     width: 52, height: 52, borderRadius: 14,
@@ -91,7 +92,7 @@ const s = StyleSheet.create({
   bold: { fontWeight: '600', color: '#1e293b' },
 
   links: { marginTop: 8, gap: 10 },
-  link: { fontSize: 14, color: '#2dd4a7', fontWeight: '500' },
+  link: { fontSize: 14, color: COLORS.teal, fontWeight: '500' },
 
   actions: { padding: 24, gap: 10 },
   btnPrimary: {

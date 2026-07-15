@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { budgetService, BudgetSummary, CategorySummary, MonthlyTotal } from '../services/budgetService';
 import { fmt, currentMonth, addMonths, monthLabel, shortMonth } from '../utils/format';
-import { GLASS } from '../styles/theme';
+import { GLASS, COLORS } from '../styles/theme';
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ const BarChart = ({ data }: { data: MonthlyTotal[] }) => {
           const x = i * (barW + 6);
           return (
             <React.Fragment key={d.month}>
-              <Rect x={x} y={H - h} width={barW} height={h} rx={4} fill="#2dd4a7" opacity={0.85} />
+              <Rect x={x} y={H - h} width={barW} height={h} rx={4} fill={COLORS.teal} opacity={0.85} />
               <SvgText x={x + barW / 2} y={H + 14} fontSize={9} fill="rgba(255,255,255,0.4)" textAnchor="middle">
                 {shortMonth(d.month)}
               </SvgText>
@@ -58,7 +58,7 @@ const ProgressBar = ({ spent, limit, color }: { spent: number; limit: number; co
   );
 };
 const pb = StyleSheet.create({
-  track: { height: 5, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', marginTop: 6 },
+  track: { height: 5, backgroundColor: COLORS.mutedLight, borderRadius: 3, overflow: 'hidden', marginTop: 6 },
   fill: { height: '100%', borderRadius: 3 },
 });
 
@@ -112,7 +112,7 @@ const EditBudgetModal: React.FC<{
 
 const em = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  card: { backgroundColor: '#1e293b', borderRadius: 20, padding: 24, width: 300, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  card: { backgroundColor: '#1e293b', borderRadius: 20, padding: 24, width: 300, alignItems: 'center', borderWidth: 1, borderColor: COLORS.mutedLight },
   icon: { fontSize: 36, marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 4 },
   sub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 16 },
@@ -120,8 +120,8 @@ const em = StyleSheet.create({
   row: { flexDirection: 'row', gap: 12, width: '100%' },
   cancel: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center' },
   cancelTxt: { color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-  save: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: '#2dd4a7', alignItems: 'center' },
-  saveTxt: { color: '#0f172a', fontWeight: '700' },
+  save: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: COLORS.teal, alignItems: 'center' },
+  saveTxt: { color: COLORS.bg, fontWeight: '700' },
 });
 
 // ─── Category Row ─────────────────────────────────────────────────────────────
@@ -159,8 +159,8 @@ const cr = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 14, fontWeight: '600', color: '#fff' },
   spent: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  over: { color: '#fca5a5' },
-  limit: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 3 },
+  over: { color: COLORS.red },
+  limit: { fontSize: 11, color: COLORS.muted, marginTop: 3 },
   nobudget: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 4 },
 });
 
@@ -206,12 +206,12 @@ export const BudgetScreen: React.FC = () => {
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       {loading ? (
-        <View style={s.center}><ActivityIndicator color="#2dd4a7" /></View>
+        <View style={s.center}><ActivityIndicator color={COLORS.teal} /></View>
       ) : (
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2dd4a7" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.teal} />}
         >
           {/* Hero — month nav + totals */}
           <View style={s.hero}>
@@ -265,7 +265,7 @@ export const BudgetScreen: React.FC = () => {
                   <View style={cr.mid}>
                     <View style={cr.topRow}>
                       <Text style={cr.name}>{cat.name}</Text>
-                      <Text style={[cr.spent, { color: '#4ade80' }]}>{fmt(cat.spent)}</Text>
+                      <Text style={[cr.spent, { color: COLORS.green }]}>{fmt(cat.spent)}</Text>
                     </View>
                   </View>
                 </View>
@@ -308,11 +308,11 @@ const s = StyleSheet.create({
   totalDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.15)' },
   totalLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
   totalValue: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  incomeVal: { color: '#4ade80' },
+  incomeVal: { color: COLORS.green },
 
   // Content cards
   card: { ...GLASS, padding: 16 },
-  cardTitle: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12 },
+  cardTitle: { fontSize: 12, fontWeight: '700', color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12 },
 
   // Empty state
   empty: { alignItems: 'center', paddingTop: 48 },

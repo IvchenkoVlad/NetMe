@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     margin: 12,
     borderWidth: 1,
-    borderColor: '#fca5a5',
+    borderColor: COLORS.red,
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',
