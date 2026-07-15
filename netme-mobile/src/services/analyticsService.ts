@@ -1,7 +1,5 @@
-import { authService } from './authService';
+import { api } from './api';
 import { MonthlyTotal } from './budgetService';
-
-const api = authService.api;
 
 export interface NetWorth {
   assets: number;

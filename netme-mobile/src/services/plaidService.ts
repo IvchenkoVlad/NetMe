@@ -1,6 +1,4 @@
-import { authService } from './authService';
-
-const api = authService.api;
+import { api } from './api';
 
 export const plaidService = {
   createLinkToken: async (): Promise<string> => {
